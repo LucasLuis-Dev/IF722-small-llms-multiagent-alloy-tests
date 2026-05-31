@@ -1,16 +1,90 @@
-```alloy
-sig User {
-  password: one Password // Every User has exactly one Password
+
+signature Requirement {}
+signature TestCase {
+    covers: set Requirement
 }
 
-sig Password {}
-// Constraint: Every Password belongs to exactly one User.
-// This means the inverse of the 'password' relation (p.~password) must be
-// a function from Password to User, where each Password is mapped to exactly one User.
-fact {
-  all p: Password | one (p.~password)
-// Generate an instance where the number of Users and Passwords is at most 4.
-// Due to the bijections defined by the 'password' field and the fact,
-// the number of User instances will always be equal to the number of Password instances.
-run {} for 4
-```
+pred someTestCaseIsWritten {
+    some tc: TestCase | some tc.covers
+}
+
+// Positive Instances (expect 1)
+
+run {
+    someTestCaseIsWritten
+    #TestCase = 1
+    #Requirement = 1
+    one tc: TestCase, one r: Requirement | tc.covers = r
+} for 4 expect 1
+
+run {
+    someTestCaseIsWritten
+    #TestCase = 1
+    #Requirement = 2
+    one tc: TestCase | #tc.covers = 2
+} for 4 expect 1
+
+run {
+    someTestCaseIsWritten
+    #TestCase = 2
+    #Requirement = 1
+    let tc1, tc2: TestCase, r1: Requirement | {
+        tc1.covers = r1
+        tc2.covers = none
+    }
+} for 4 expect 1
+
+run {
+    someTestCaseIsWritten
+    #TestCase = 2
+    #Requirement = 2
+    all tc: TestCase | some tc.covers
+} for 4 expect 1
+
+run {
+    someTestCaseIsWritten
+    #TestCase = 3
+    #Requirement = 3
+    let tc1, tc2, tc3: TestCase, r1, r2, r3: Requirement | {
+        tc1.covers = r1
+        tc2.covers = r2 + r3
+        tc3.covers = none
+    }
+} for 4 expect 1
+
+// Negative Instances (expect 0)
+
+run {
+    not someTestCaseIsWritten
+    #TestCase = 1
+    #Requirement = 1
+    one tc: TestCase | no tc.covers
+} for 4 expect 0
+
+run {
+    not someTestCaseIsWritten
+    #TestCase = 2
+    #Requirement = 1
+    all tc: TestCase | no tc.covers
+} for 4 expect 0
+
+run {
+    not someTestCaseIsWritten
+    #TestCase = 2
+    no Requirement
+    all tc: TestCase | no tc.covers
+} for 4 expect 0
+
+run {
+    not someTestCaseIsWritten
+    #TestCase = 1
+    #Requirement = 2
+    one tc: TestCase | no tc.covers
+} for 4 expect 0
+
+run {
+    not someTestCaseIsWritten
+    #TestCase = 3
+    #Requirement = 3
+    all tc: TestCase | no tc.covers
+} for 4 expect 0

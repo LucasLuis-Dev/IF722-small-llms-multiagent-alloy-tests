@@ -12,10 +12,13 @@ def load_prompt_template() -> str:
     with open(PROMPT_PATH, "r") as f:
         return f.read()
 
-def generate_test_cases(requirement: str, model_code: str) -> dict:
+def generate_test_cases(requirement: str, model_code: str, previous_code: str = None, previous_error: str = None) -> dict:
     template = load_prompt_template()
     prompt = template.replace("{{REQUIREMENT}}", requirement).replace("{{MODEL}}", model_code)
     
+    if previous_code and previous_error:
+        prompt += f"\n\n--- SELF-REFLECTION ---\nIn your previous attempt, you generated this code:\n```alloy\n{previous_code}\n```\nBut the Alloy Analyzer returned the following error:\n{previous_error}\nPlease fix the syntax or structural errors and generate the updated code. Ensure you strictly follow all original rules."
+
     model = genai.GenerativeModel(GEMINI_MODEL)
     response = model.generate_content(prompt)
     
