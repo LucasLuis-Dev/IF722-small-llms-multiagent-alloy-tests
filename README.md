@@ -1,12 +1,21 @@
 # IF722 – Small LLMs with Multi-Agent Post-Processing for Alloy Test Generation
 
-> Projeto da disciplina IF722 – Engenharia de Software Baseada em Evidências  
+> Projeto da disciplina IF722 – Tópicos Avançados em Engenharia de Software  
 > Universidade Federal de Pernambuco (UFPE)  
 > Forked from [haslab/Alloy-LLM-Testing](https://github.com/haslab/Alloy-LLM-Testing)
 
 ## Resumo
 
 Este projeto estende o trabalho "Validating Formal Specifications with LLM-generated Test Cases" (FM26) ao investigar se modelos de linguagem menores e mais baratos — especificamente o **Gemini 2.5 Flash** — conseguem gerar casos de teste Alloy com qualidade comparável ao GPT-5, quando assistidos por um pipeline **multi-agente com pós-processamento sintático**.
+
+## Equipe
+
+| Nome | Login UFPE |
+|------|-----------|
+| Lucas Luis de Souza | lls4 |
+| Antonio Apolinario | aab2 |
+| Monyque Gabrieli | mgbl |
+| Lucas de Holanda | lhl |
 
 ## Escopo
 
@@ -176,11 +185,3 @@ docker run -it -v ${PWD}:/app -e GEMINI_API_KEY="sua_chave_aqui" alloy-multiagen
 
 Os resultados do GPT-5 usados como baseline são provenientes do artigo original, disponíveis em [haslab/Alloy-LLM-Testing](https://github.com/haslab/Alloy-LLM-Testing).
 
-## Equipe
-
-| Nome | Login UFPE |
-|------|-----------|
-| Lucas Luis de Souza | lls4 |
-| Antonio Apolinario | aab2 |
-| Monyque Gabrieli | mgbl |
-| Lucas de Holanda | lhl |
