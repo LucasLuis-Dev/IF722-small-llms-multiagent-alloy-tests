@@ -1,0 +1,32 @@
+{
+    "Photo sharing social network": {
+        "this/inv1": {
+            "parse": [
+                "run {\n  // Instance 1: No photos exist. The requirement is vacuously true.\n  no Photo and everyPhotoIsPostedByOneUser\n} for 4 expect 1",
+                "run {\n  // Instance 2: One user posts one photo.\n  one u: User, one p: Photo |\n  u.posts = p and everyPhotoIsPostedByOneUser\n} for 4 expect 1",
+                "run {\n  // Instance 3: One user posts two distinct photos.\n  one u: User, some disj p1, p2: Photo |\n  u.posts = p1 + p2 and everyPhotoIsPostedByOneUser\n} for 4 expect 1",
+                "run {\n  // Instance 4: Two distinct users each post one distinct photo.\n  // Assumes these are the only photos to ensure the predicate holds.\n  some disj u1, u2: User, disj p1, p2: Photo |\n  u1.posts = p1 and u2.posts = p2 and\n  (all p: Photo | p = p1 or p = p2) and\n  everyPhotoIsPostedByOneUser\n} for 4 expect 1",
+                "run {\n  // Instance 5: Multiple users post multiple photos, with each photo having exactly one poster.\n  // Assumes these are the only photos to ensure the predicate holds.\n  some disj u1, u2: User, disj p1, p2, p3: Photo |\n  u1.posts = p1 + p2 and\n  u2.posts = p3 and\n  (all p: Photo | p = p1 or p = p2 or p = p3) and\n  everyPhotoIsPostedByOneUser\n} for 4 expect 1",
+                "run {\n  // Instance 5: An Ad is posted by both an Influencer and a Regular User.\n  one p: Ad, one inf: Influencer, one reg: User - Influencer |\n  p in inf.posts and p in reg.posts\n} for 4 expect 0"
+            ],
+            "valid": [
+                "run {\n  // Instance 3: Two photos exist; one is unposted, and the other is multiply posted by two users.\n  some p_unposted, p_multiply: Photo, disj u1, u2: User |\n  p_unposted != p_multiply and\n  no u: User | p_unposted in u.posts and\n  p_multiply in u1.posts and p_multiply in u2.posts\n} for 4 expect 0"
+            ]
+        },
+        "this/inv2": {
+            "parse": [
+                "run {\n  some i: Influencer\n  some u: User - Influencer\n  i in u.follows // Regular user follows influencer\n  u not in i.follows // Influencer does not follow regular user\n  all x: User | x not in x.follows\n} for 4 expect 1",
+                "run {\n  some disj u1, u2: User\n  some i: Influencer\n  u1 in i.follows\n  i in u2.follows\n  u2 in u1.follows\n  all x: User | x not in x.follows\n} for 4 expect 1",
+                "run {\n  some u: User - Influencer {\n    u in u.follows // Forces a regular user to violate\n  }\n  some i: Influencer // Ensures an influencer exists, even if not self-following\n  all x: User | x not in x.follows // Contradiction\n} for 4 expect 0"
+            ],
+            "consistent": [
+                "run {\n  some u: User | u in u.follows // This forces a violation of the requirement\n  all x: User | x not in x.follows // This is the requirement itself, creating a contradiction\n} for 4 expect 0",
+                "run {\n  some disj u1, u2: User {\n    u1 in u1.follows // Forces a violation\n    u2 in u1.follows // Additional relation\n  }\n  all x: User | x not in x.follows // Contradiction\n} for 4 expect 0",
+                "run {\n  some i: Influencer | i in i.follows // Forces a violation by an Influencer\n  all x: User | x not in x.follows // Contradiction\n} for 4 expect 0"
+            ],
+            "valid": [
+                "run {\n  all u: User | u in u.follows // Forces all users to violate\n  all x: User | x not in x.follows // Contradiction\n} for 4 expect 0"
+            ]
+        }
+    }
+}

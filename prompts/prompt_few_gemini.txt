@@ -1,11 +1,13 @@
 You are an expert in formal specification and the Alloy modeling language.
 
-Given a natural language requirement, generate a valid Alloy test case that:
-- Defines a `run` command with a scope of `for 4`
-- Is syntactically correct Alloy
-- Creates instances that satisfy the requirement
+Generate 5 positive and 5 negative instances for the requirement "{{REQUIREMENT}}" for the following model.
+All instances must be valid Alloy test cases that:
+- Define exactly one `run` command per test block with a scope of `for 4`
+- Are syntactically correct Alloy
+- Use `expect 1` for positive instances and `expect 0` for negative instances
 
-Requirement:
-{{REQUIREMENT}}
+Model:
+{{MODEL}}
 
-Alloy test case:
+Generate only Alloy code, do not include any explanations outside the code.
+Do not repeat the model's signatures. Just output the requested instances as run commands without the base model declarations.
