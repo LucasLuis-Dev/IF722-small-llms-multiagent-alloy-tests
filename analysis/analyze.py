@@ -208,16 +208,18 @@ def main():
                 input_req, output_req, tests_req, syntax_req, scopes_req, previous_req, valid_req, wrong_req, misses_req, complete_req, average_req = map(sum, zip(*summaries))
                 for req in result[example]:
                     current = result[example][req]
-                    out.write(f'{current["desc"]}\t{current["input"]}\t{current["output"]}\t{current["input"]*input_cost+current["output"]*output_cost:.2f}\t{current["generated"]}\t{current["parse"]}\t{current["scope"]}\t{current["previous"]}\t{current["oracle"]}\t{(current["oracle"]/current["generated"])*100:.2f}')
-                    outt.write(f'{current["desc"]}\t{current["input"]}\t{current["output"]}\t{current["input"]*input_cost+current["output"]*output_cost:.2f}\t{current["generated"]}\t{current["parse"]}\t{current["scope"]}\t{current["previous"]}\t{current["oracle"]}\t{(current["oracle"]/current["generated"])*100:.2f}')
+                    pct_curr = (current["oracle"]/current["generated"])*100 if current["generated"] > 0 else 0.0
+                    out.write(f'{current["desc"]}\t{current["input"]}\t{current["output"]}\t{current["input"]*input_cost+current["output"]*output_cost:.2f}\t{current["generated"]}\t{current["parse"]}\t{current["scope"]}\t{current["previous"]}\t{current["oracle"]}\t{pct_curr:.2f}')
+                    outt.write(f'{current["desc"]}\t{current["input"]}\t{current["output"]}\t{current["input"]*input_cost+current["output"]*output_cost:.2f}\t{current["generated"]}\t{current["parse"]}\t{current["scope"]}\t{current["previous"]}\t{current["oracle"]}\t{pct_curr:.2f}')
                     if current["oracle"] == current["generated"]:
                         out.write(f'\t1\t{current["wrong"]}\t{current["misses"]}\t{(current["misses"]/current["wrong"])*100:.2f}\n')
                         outt.write(f'\t1\t{current["wrong"]}\t{current["misses"]}\t{(current["misses"]/current["wrong"])*100:.2f}\n')
                     else:
                         out.write("\t0\t\t\t\n")
                         outt.write("\t0\t\t\t\n")
-                out.write(f'**{example} totals**\t**{input_req}**\t**{output_req}**\t**{input_req*input_cost+output_req*output_cost:.2f}**\t**{tests_req}**\t**{syntax_req}**\t**{scopes_req}**\t**{previous_req}**\t**{valid_req}**\t**{(valid_req/tests_req)*100:.1f}**\t**{complete_req}**\t**{wrong_req}**\t**{misses_req}**\t**{(average_req/complete_req) if complete_req > 0 else 0:.2f}**\n')
-                outt.write(f'{example} totals\t{input_req}\t{output_req}\t{input_req*input_cost+output_req*output_cost:.2f}\t{tests_req}\t{syntax_req}\t{scopes_req}\t{previous_req}\t{valid_req}\t{(valid_req/tests_req)*100:.1f}\t{complete_req}\t{wrong_req}\t{misses_req}\t{(average_req/complete_req) if complete_req > 0 else 0:.2f}\n')
+                pct_req = (valid_req/tests_req)*100 if tests_req > 0 else 0.0
+                out.write(f'**{example} totals**\t**{input_req}**\t**{output_req}**\t**{input_req*input_cost+output_req*output_cost:.2f}**\t**{tests_req}**\t**{syntax_req}**\t**{scopes_req}**\t**{previous_req}**\t**{valid_req}**\t**{pct_req:.1f}**\t**{complete_req}**\t**{wrong_req}**\t**{misses_req}**\t**{(average_req/complete_req) if complete_req > 0 else 0:.2f}**\n')
+                outt.write(f'{example} totals\t{input_req}\t{output_req}\t{input_req*input_cost+output_req*output_cost:.2f}\t{tests_req}\t{syntax_req}\t{scopes_req}\t{previous_req}\t{valid_req}\t{pct_req:.1f}\t{complete_req}\t{wrong_req}\t{misses_req}\t{(average_req/complete_req) if complete_req > 0 else 0:.2f}\n')
                 input_total += input_req
                 output_total += output_req
                 tests_total += tests_req
@@ -229,8 +231,9 @@ def main():
                 misses_total += misses_req
                 complete_total += complete_req
                 average_total += average_req
-            out.write(f'**Totals**\t**{input_total}**\t**{output_total}**\t**{input_total*input_cost+output_total*output_cost:.2f}**\t**{tests_total}**\t**{syntax_total}**\t**{scopes_total}**\t**{previous_total}**\t**{valid_total}**\t**{(valid_total/tests_total)*100:.2f}**\t**{complete_total}**\t**{wrong_total}**\t**{misses_total}**\t**{(average_total/complete_total) if complete_total > 0 else 0:.2f}**\n')
-            outt.write(f'Totals\t{input_total}\t{output_total}\t{input_total*input_cost+output_total*output_cost:.2f}\t{tests_total}\t{syntax_total}\t{scopes_total}\t{previous_total}\t{valid_total}\t{(valid_total/tests_total)*100:.2f}\t{complete_total}\t{wrong_total}\t{misses_total}\t{(average_total/complete_total) if complete_total > 0 else 0:.2f}\n')
+            pct_tot = (valid_total/tests_total)*100 if tests_total > 0 else 0.0
+            out.write(f'**Totals**\t**{input_total}**\t**{output_total}**\t**{input_total*input_cost+output_total*output_cost:.2f}**\t**{tests_total}**\t**{syntax_total}**\t**{scopes_total}**\t**{previous_total}**\t**{valid_total}**\t**{pct_tot:.2f}**\t**{complete_total}**\t**{wrong_total}**\t**{misses_total}**\t**{(average_total/complete_total) if complete_total > 0 else 0:.2f}**\n')
+            outt.write(f'Totals\t{input_total}\t{output_total}\t{input_total*input_cost+output_total*output_cost:.2f}\t{tests_total}\t{syntax_total}\t{scopes_total}\t{previous_total}\t{valid_total}\t{pct_tot:.2f}\t{complete_total}\t{wrong_total}\t{misses_total}\t{(average_total/complete_total) if complete_total > 0 else 0:.2f}\n')
 
         tsv_to_markdown(output, output.replace('.tsv','.md'))
         os.remove(output)

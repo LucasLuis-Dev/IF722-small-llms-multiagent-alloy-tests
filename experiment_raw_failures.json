@@ -1,31 +1,476 @@
 {
     "Photo sharing social network": {
-        "this/inv1": {
+        "this/inv2": {
             "parse": [
-                "run {\n  // Instance 1: No photos exist. The requirement is vacuously true.\n  no Photo and everyPhotoIsPostedByOneUser\n} for 4 expect 1",
-                "run {\n  // Instance 2: One user posts one photo.\n  one u: User, one p: Photo |\n  u.posts = p and everyPhotoIsPostedByOneUser\n} for 4 expect 1",
-                "run {\n  // Instance 3: One user posts two distinct photos.\n  one u: User, some disj p1, p2: Photo |\n  u.posts = p1 + p2 and everyPhotoIsPostedByOneUser\n} for 4 expect 1",
-                "run {\n  // Instance 4: Two distinct users each post one distinct photo.\n  // Assumes these are the only photos to ensure the predicate holds.\n  some disj u1, u2: User, disj p1, p2: Photo |\n  u1.posts = p1 and u2.posts = p2 and\n  (all p: Photo | p = p1 or p = p2) and\n  everyPhotoIsPostedByOneUser\n} for 4 expect 1",
-                "run {\n  // Instance 5: Multiple users post multiple photos, with each photo having exactly one poster.\n  // Assumes these are the only photos to ensure the predicate holds.\n  some disj u1, u2: User, disj p1, p2, p3: Photo |\n  u1.posts = p1 + p2 and\n  u2.posts = p3 and\n  (all p: Photo | p = p1 or p = p2 or p = p3) and\n  everyPhotoIsPostedByOneUser\n} for 4 expect 1",
-                "run {\n  // Instance 5: An Ad is posted by both an Influencer and a Regular User.\n  one p: Ad, one inf: Influencer, one reg: User - Influencer |\n  p in inf.posts and p in reg.posts\n} for 4 expect 0"
+                "run {\n    // Influencers and regular users exist, following is only between distinct users.\n    some i1, i2: Influencer | i1 != i2 and i1 in i2.follows\n    some u: User - Influencer // Ensure there's also a non-influencer user\n    all u: User | u not in u.follows\n} for 4 expect 1",
+                "run {\n    // A chain of following exists, but no self-loops.\n    #User >= 3\n    let u1 = one User, u2 = one User - u1, u3 = one User - (u1 + u2) {\n        u1 in u2.follows\n        u2 in u3.follows\n    }\n    all u: User | u not in u.follows\n} for 4 expect 1",
+                "run {\n    // Multiple users exist, and at least one of them follows themselves.\n    #User >= 2\n    some u1: User | u1 in u1.follows\n    some u2: User | u2 != u1 // Ensure there's another user for context\n    all u: User | u not in u.follows\n} for 4 expect 0"
+            ],
+            "consistent": [
+                "run {\n    // A specific user follows themselves, violating the requirement.\n    some u: User | u in u.follows\n    all u: User | u not in u.follows // This predicate should be false for any found instance.\n} for 4 expect 0",
+                "run {\n    // An Influencer follows themselves, violating the requirement.\n    some i: Influencer | i in i.follows\n    all u: User | u not in u.follows\n} for 4 expect 0",
+                "run {\n    // A single user exists and follows themselves.\n    #User = 1\n    one u: User {\n        u in u.follows\n    }\n    all u: User | u not in u.follows\n} for 4 expect 0"
             ],
             "valid": [
-                "run {\n  // Instance 3: Two photos exist; one is unposted, and the other is multiply posted by two users.\n  some p_unposted, p_multiply: Photo, disj u1, u2: User |\n  p_unposted != p_multiply and\n  no u: User | p_unposted in u.posts and\n  p_multiply in u1.posts and p_multiply in u2.posts\n} for 4 expect 0"
+                "run {\n    // All users follow themselves, a strong violation.\n    all u: User | u in u.follows\n    all u: User | u not in u.follows\n} for 4 expect 0"
+            ]
+        },
+        "this/inv3": {
+            "parse": [
+                "run P1_AllAdsSeen {\n  some u: User, some a: Ad {\n    // A user posts an ad.\n    u.posts = a\n    // All users see this ad.\n    all u_all: User | a in u_all.sees\n    // No non-ads exist in this scenario, simplifying the second part of the requirement.\n    no Photo - Ad\n  }\n} for 4 expect 1",
+                "run P3_MixedScenarioSimple {\n  some disj u1, u2, u3: User {\n    // U1 follows U2.\n    u1.follows = u2\n    // U2 posts a non-ad photo P.\n    one p: Photo - Ad { u2.posts = p }\n    // U3 posts an ad A.\n    one a: Ad { u3.posts = a }\n\n    // U1 sees Ad A (posted by U3) and non-Ad P (posted by followed U2).\n    u1.sees = a + p\n    // U2 sees Ad A (posted by U3), but not P (as U2 doesn't follow self).\n    u2.sees = a\n    // U3 sees Ad A (posted by U3), but not P (as U3 doesn't follow U2).\n    u3.sees = a\n\n    // Ensure other users (if any) only see ads.\n    all u: User - (u1+u2+u3) | u.sees = a\n    // Ensure no other photos are posted besides A and P.\n    all photo_other: Photo - (a + p) | photo_other not in (User.posts)\n  }\n  Req\n} for 4 expect 1",
+                "run P5_NonAdOwnPostNotSeen {\n  some disj u1, u2: User {\n    some p1, p2: Photo - Ad {\n      // U1 posts P1, U2 posts P2.\n      u1.posts = p1\n      u2.posts = p2\n      // U1 follows U2, and U2 follows U1 (mutual following).\n      u1.follows = u2\n      u2.follows = u1\n\n      // U1 sees P2 (from U2 whom U1 follows), but NOT P1 (since U1 doesn't follow self).\n      u1.sees = p2\n      // U2 sees P1 (from U1 whom U2 follows), but NOT P2 (since U2 doesn't follow self).\n      u2.sees = p1\n    }\n    // No ads exist in this scenario.\n    no Ad\n    // Other users, if any, don't post, see, or follow.\n    all u: User - (u1+u2) | u.posts = none and u.sees = none and u.follows = none\n  }\n  Req\n} for 4 expect 1",
+                "run N1_AdNotSeen {\n  some disj u1, u2: User {\n    some a: Ad {\n      // User u1 posts an ad a.\n      u1.posts = a\n      // But user u2 does NOT see this ad, violating \"Users can see ads posted by everyone\".\n      a not in u2.sees\n    }\n    // Ensure all other users (except u2) see the ad for a focused violation.\n    all u: User - u2 | a in u.sees\n    // No non-ads for simplicity.\n    no Photo - Ad\n  }\n  Req\n} for 4 expect 0",
+                "run N2_NonAdSeenFromUnfollowed {\n  some disj u1, u2: User {\n    some p: Photo - Ad {\n      // User u2 posts a non-ad photo p.\n      u2.posts = p\n      // User u1 sees photo p.\n      p in u1.sees\n      // But user u1 does NOT follow u2 (or anyone), violating \"only see non ads posted by followed users\".\n      u1.follows = none\n    }\n    // No ads for simplicity.\n    no Ad\n    // Ensure other users, if any, don't post or see.\n    all u: User - (u1+u2) | u.posts = none and u.sees = none\n  }\n  Req\n} for 4 expect 0",
+                "run N3_OwnNonAdSeenWithoutFollowingSelf {\n  one u: User {\n    one p: Photo - Ad {\n      // User u posts a non-ad photo p.\n      u.posts = p\n      // User u sees their own non-ad photo p.\n      p in u.sees\n      // But user u does NOT follow themselves (or anyone), violating \"only see non ads posted by followed users\".\n      u.follows = none\n    }\n    // No ads for simplicity.\n    no Ad\n    // Other users, if any, don't post or see.\n    all u_other: User - u | u_other.posts = none and u_other.sees = none\n  }\n  Req\n} for 4 expect 0",
+                "run N4_MixedViolations {\n  some disj u1, u2, u3: User {\n    // Violation 1: Ad not seen by everyone.\n    some a: Ad {\n      u1.posts = a\n      a not in u3.sees // U3 fails to see an ad posted by U1.\n      u1.sees = a // u1 sees its own ad\n    }\n    // Violation 2: Non-ad seen from unfollowed user.\n    some p: Photo - Ad {\n      u2.posts = p\n      p in u3.sees // U3 sees non-ad P posted by U2.\n      u3.follows = none // U3 follows nobody, thus not U2.\n      u2.sees = none // U2 doesn't see its own non-ad to avoid accidental validity.\n    }\n  }\n  Req\n} for 4 expect 0",
+                "run N5_SingleUserAdNotSeen {\n  one u: User {\n    one a: Ad {\n      // User u posts an ad a.\n      u.posts = a\n      // But user u does NOT see their own ad, violating \"Users can see ads posted by everyone\".\n      u.sees = none\n    }\n    // No non-ads for simplicity.\n    no Photo - Ad\n  }\n  Req\n} for 4 expect 0"
+            ]
+        },
+        "this/inv4": {
+            "parse": [
+                "run {\n  no Ad // Ensures no Ad exists, so no user can post one.\n  some u1 : User, p1 : Photo // Ensure there are users and photos, for a non-trivial state.\n  u1.posts = p1\n  CheckRequirement\n} for 4 expect 1",
+                "run {\n  one u1 : User // Focus on one user's posts.\n  some a1, a2 : Ad, d : Day\n  a1.date = d\n  a2.date = d\n  u1.posts = a1 + a2 // u1 posts only Ads.\n  all u : User - u1 | no u.posts // Other users post nothing.\n  CheckRequirement\n} for 4 expect 1",
+                "run {\n  no Photo // Since Ad is a Photo, this also means no Ads exist.\n  no posts // All 'posts' sets are empty, satisfying the implication trivially.\n  CheckRequirement\n} for 4 expect 1",
+                "run {\n  some u1, u2 : User, a1 : Ad, a2 : Ad, p1 : Photo - Ad, d : Day\n  u1 != u2\n  a1.date = d\n  a2.date = d\n  p1.date = d\n\n  u1.posts = a1 + a2 // u1 posts only Ads (satisfies).\n  u2.posts = p1      // u2 posts only non-Ads (premise is false, so satisfies).\n  CheckRequirement\n} for 4 expect 1",
+                "run {\n  some d : Day\n  all u : User | {\n    some a : Ad | a.date = d and a in u.posts // Each user posts at least one Ad.\n    all p : u.posts | p in Ad // And all posts by that user are Ads.\n  }\n  CheckRequirement\n} for 4 expect 1",
+                "run {\n  some u1 : User, a1 : Ad, p1 : Photo - Ad, d : Day\n  a1.date = d\n  p1.date = d\n  u1.posts = a1 + p1 // u1 posts an Ad (a1) and a non-Ad (p1), violating the rule.\n  CheckRequirement\n} for 4 expect 0",
+                "run {\n  some u1, u2 : User, a1 : Ad, p1 : Photo - Ad, d : Day\n  u1 != u2\n  a1.date = d\n  p1.date = d\n\n  u1.posts = a1 + p1 // u1 violates the rule.\n  u2.posts = a1      // u2 satisfies the rule (posts only an Ad).\n  CheckRequirement\n} for 4 expect 0",
+                "run {\n  some i1 : Influencer, a1 : Ad, p1 : Photo - Ad, d : Day\n  a1.date = d\n  p1.date = d\n  i1.posts = a1 + p1 // Influencer i1 posts an Ad and a non-Ad.\n  CheckRequirement\n} for 4 expect 0",
+                "run {\n  one u : User, one a : Ad, one p : Photo - Ad, one d : Day\n  a.date = d\n  p.date = d\n  u.posts = a + p // The single user 'u' posts an Ad 'a' and a non-Ad 'p', violating the rule.\n  CheckRequirement\n} for 4 expect 0",
+                "run {\n  some d : Day\n  all u : User | {\n    some a : Ad, p : Photo - Ad | // Each user posts at least one Ad AND at least one non-Ad.\n      a.date = d and p.date = d\n      a in u.posts and p in u.posts\n  }\n  CheckRequirement\n} for 4 expect 0"
+            ]
+        },
+        "this/inv5": {
+            "parse": [
+                "run {\n  exactly 1 User and one Influencer and (all i : Influencer, u : User | u != i implies u in i.follows)\n} for 4 expect 1",
+                "run {\n  let i = some Influencer | no (Influencer - i) and (all u : User - i | u in i.follows)\n} for 4 expect 1",
+                "run {\n  exactly 2 Influencer and no (User - Influencer) and \n  (all i1, i2 : Influencer | i1 != i2 implies (i1 in i2.follows and i2 in i1.follows))\n} for 4 expect 1",
+                "run {\n  exactly 1 Influencer and exactly 1 (User - Influencer) and \n  let i = some Influencer, u = some (User - Influencer) | u not in i.follows\n} for 4 expect 0",
+                "run {\n  exactly 2 Influencer and no (User - Influencer) and \n  let i1 = some Influencer, i2 = some Influencer - i1 | i1 not in i2.follows\n} for 4 expect 0",
+                "run {\n  exactly 1 Influencer and \n  let i = some Influencer | some u1, u2 : User - i | u1 != u2 and u1 in i.follows and u2 not in i.follows\n} for 4 expect 0"
+            ],
+            "valid": [
+                "run {\n  some i : Influencer, u : User | u != i and u not in i.follows\n} for 4 expect 0",
+                "run {\n  some i1, i2 : Influencer | i1 != i2 and \n  some u : User - Influencer | u in i1.follows and u not in i2.follows\n} for 4 expect 0"
+            ]
+        },
+        "this/inv6": {
+            "consistent": [
+                "run {\n  #Influencer = 1\n  #Day = 1\n  #Photo = 0 // No photos exist, so no influencer can post.\n  all i : Influencer, d : Day { some p : Photo { p.date = d and p in i.posts } }\n} for 4 expect 0"
+            ],
+            "parse": [
+                "run {\n  #Influencer = 1\n  #Day = 2\n  #Photo = 1\n  one i : Influencer\n  one d0, d1 : Day | d0 != d1\n  one p : Photo\n  p.date = d0\n  i.posts = p // The influencer only posts this one photo on d0, so not on d1.\n  all i_var : Influencer, d_var : Day { some p_var : Photo { p_var.date = d_var and p_var in i_var.posts } }\n} for 4 expect 0",
+                "run {\n  #Influencer = 2\n  #Day = 2\n  some i0, i1 : Influencer | i0 != i1\n  some d0, d1 : Day | d0 != d1\n  // i0 posts on d0 and d1\n  some p0 : Photo | p0.date = d0 and p0 in i0.posts\n  some p1 : Photo | p1.date = d1 and p1 in i0.posts\n  // i1 posts on d0 but not on d1\n  some p2 : Photo | p2.date = d0 and p2 in i1.posts\n  no p : Photo | p.date = d1 and p in i1.posts // This is the violation for i1 on d1\n  all i_var : Influencer, d_var : Day { some p_var : Photo { p_var.date = d_var and p_var in i_var.posts } }\n} for 4 expect 0",
+                "run {\n  #Influencer = 1\n  #User = 2 // One Influencer, one regular User\n  #Day = 1\n  #Photo = 1\n  one u_reg : User - Influencer\n  one p : Photo\n  one d : Day\n  p.date = d\n  u_reg.posts = p // The only photo is posted by a regular user.\n  all i : Influencer { no p_i : Photo | p_i in i.posts } // Influencers post nothing.\n  all i_var : Influencer, d_var : Day { some p_var : Photo { p_var.date = d_var and p_var in i_var.posts } }\n} for 4 expect 0",
+                "run {\n  #Influencer = 1\n  #Day = 2\n  #Photo = 1\n  one i : Influencer\n  one d_wrong, d_missing : Day | d_wrong != d_missing\n  one p : Photo\n  p.date = d_wrong\n  i.posts = p // The influencer posts, but only on d_wrong. They miss d_missing.\n  all i_var : Influencer, d_var : Day { some p_var : Photo { p_var.date = d_var and p_var in i_var.posts } }\n} for 4 expect 0"
+            ]
+        },
+        "this/inv7": {
+            "parse": [
+                "run {\n  User0.follows = User1\n  User1.follows = User2\n  User2.follows = none\n  User3.follows = none\n\n  User0.suggested = User2\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 1",
+                "run {\n  User0.follows = User1\n  User1.follows = User0\n  User2.follows = User3\n  User3.follows = User2\n\n  User0.suggested = none\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 1",
+                "run {\n  User0.follows = User1 + User3\n  User1.follows = User2\n  User3.follows = User2\n  User2.follows = none\n\n  User0.suggested = User2\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 1",
+                "run {\n  User0.follows = User1 + User2\n  User1.follows = User2\n  User2.follows = User3\n  User3.follows = none\n\n  User0.suggested = User3\n  User1.suggested = User3\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 1",
+                "run {\n  User0.follows = User1 + User2 + User3\n  User1.follows = User0 + User2 + User3\n  User2.follows = User0 + User1 + User3\n  User3.follows = User0 + User1 + User2\n\n  User0.suggested = none\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 1",
+                "run {\n  User0.follows = User1\n  User1.follows = User2\n  User2.follows = none\n  User3.follows = none\n\n  User0.suggested = none // ERROR: Should be User2\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 0",
+                "run {\n  User0.follows = User1 + User2\n  User1.follows = User2\n  User2.follows = none\n  User3.follows = none\n\n  User0.suggested = User2 // ERROR: Should be none (User2 is already followed)\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 0",
+                "run {\n  User0.follows = User1\n  User1.follows = User0\n  User2.follows = none\n  User3.follows = none\n\n  User0.suggested = User0 // ERROR: Cannot suggest self\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 0",
+                "run {\n  User0.follows = User1\n  User1.follows = User2\n  User2.follows = none\n  User3.follows = none\n\n  User0.suggested = User3 // ERROR: Should be User2\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 0",
+                "run {\n  User0.follows = User2\n  User1.follows = none\n  User2.follows = User1\n  User3.follows = none\n\n  User0.suggested = none // ERROR: Should be User1\n  User1.suggested = none\n  User2.suggested = none\n  User3.suggested = none\n\n  all u: User | u.suggested = (u.follows.follows - u.follows - u)\n} for 4 expect 0"
+            ]
+        },
+        "this/inv8": {
+            "parse": [
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n\n  // Setup:\n  one u1, u2: User\n  one a1: Ad\n\n  u1.sees = a1\n  a1 in u2.posts\n  u1.follows = u2\n  no u1.suggested\n} for 4 expect 1",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n\n  // Setup:\n  one u1, u2: User\n  one a1: Ad\n\n  u1.sees = a1\n  a1 in u2.posts\n  u1.suggested = u2\n  no u1.follows\n} for 4 expect 1",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n\n  // Setup:\n  one u1, u2, u3: User\n  one a1, a2: Ad\n\n  u1.sees = a1 + a2\n  a1 in u2.posts\n  a2 in u3.posts\n  u1.follows = u2\n  u1.suggested = u3\n  u2 != u3\n} for 4 expect 1",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n  no Ad\n} for 4 expect 1",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n  some Ad\n  no u: User, p: Photo | p in u.sees\n} for 4 expect 1",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n\n  // Setup:\n  one u1, u2: User\n  one a1: Ad\n\n  u1.sees = a1\n  a1 in u2.posts\n  u2 not in u1.follows\n  u2 not in u1.suggested\n} for 4 expect 0",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n\n  // Setup:\n  one u1, u2: User\n  one a1: Ad\n\n  u1.sees = a1\n  a1 in u2.posts\n  no u1.follows\n  no u1.suggested\n} for 4 expect 0",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n\n  // Setup for violation:\n  one u1, u2: User\n  one a1: Ad\n\n  u1.sees = a1\n  a1 in u2.posts\n  u2 not in u1.follows\n  u2 not in u1.suggested\n  u1 != u2\n} for 4 expect 0",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n\n  // Setup:\n  one u1, u2, u3: User\n  one a1, a2: Ad\n\n  u1.sees = a1 + a2\n  a1 in u2.posts\n  a2 in u3.posts\n\n  // Make a1 violate:\n  u2 not in u1.follows\n  u2 not in u1.suggested\n\n  // Make a2 conform:\n  u1.follows = u3\n\n  u1 != u2\n  u1 != u3\n  u2 != u3\n} for 4 expect 0",
+                "run {\n  UserOnlySeesAdsFromFollowedOrSuggested\n\n  // Setup:\n  one u1: User\n  one inf1: Influencer\n  one a1: Ad\n\n  u1.sees = a1\n  a1 in inf1.posts\n  inf1 not in u1.follows\n  inf1 not in u1.suggested\n} for 4 expect 0"
+            ]
+        }
+    },
+    "Production line": {
+        "this/inv1": {
+            "parse": [
+                "run { WorkersAreHumanOrRobot } for 4 expect 1",
+                "run { WorkersAreHumanOrRobot and some Human and no Robot } for 4 expect 1",
+                "run { WorkersAreHumanOrRobot and some Robot and no Human } for 4 expect 1",
+                "run { WorkersAreHumanOrRobot and some Human and some Robot } for 4 expect 1",
+                "run { WorkersAreHumanOrRobot and no Worker } for 4 expect 1"
+            ],
+            "consistent": [
+                "run { some Human & Robot } for 4 expect 0",
+                "run { no Worker and some Human } for 4 expect 0",
+                "run { no Worker and some Robot } for 4 expect 0"
             ]
         },
         "this/inv2": {
             "parse": [
-                "run {\n  some i: Influencer\n  some u: User - Influencer\n  i in u.follows // Regular user follows influencer\n  u not in i.follows // Influencer does not follow regular user\n  all x: User | x not in x.follows\n} for 4 expect 1",
-                "run {\n  some disj u1, u2: User\n  some i: Influencer\n  u1 in i.follows\n  i in u2.follows\n  u2 in u1.follows\n  all x: User | x not in x.follows\n} for 4 expect 1",
-                "run {\n  some u: User - Influencer {\n    u in u.follows // Forces a regular user to violate\n  }\n  some i: Influencer // Ensures an influencer exists, even if not self-following\n  all x: User | x not in x.follows // Contradiction\n} for 4 expect 0"
+                "run { Requirement } for 4 expect 1",
+                "run { Requirement and #Workstation = 1 and #Worker > 1 } for 4 expect 1",
+                "run { Requirement and (all ws: Workstation | one ws.workers) } for 4 expect 1",
+                "run { Requirement and #Workstation > 1 and #Worker > #Workstation } for 4 expect 1",
+                "run { Requirement and some Human and some Robot } for 4 expect 1",
+                "run { Requirement } { some ws: Workstation | no ws.workers } for 4 expect 0",
+                "run { Requirement } { some w: Worker | no w.~workers } for 4 expect 0",
+                "run { Requirement } { some w: Worker | #w.~workers > 1 } for 4 expect 0",
+                "run { Requirement } { all ws: Workstation | no ws.workers and some Worker } for 4 expect 0",
+                "run { Requirement } { some Workstation and some Worker and all w: Worker | #w.~workers != 1 } for 4 expect 0"
+            ]
+        },
+        "this/inv3": {
+            "parse": [
+                "run { no Component } for 4 everyComponentInOneWorkstation expect 1",
+                "run { one c : Component, one ws : Workstation | c.workstation = ws } for 4 everyComponentInOneWorkstation expect 1",
+                "run { some disj c1, c2 : Component, ws1, ws2 : Workstation | c1.workstation = ws1 and c2.workstation = ws2 and ws1 != ws2 } for 4 everyComponentInOneWorkstation expect 1",
+                "run { some disj c1, c2 : Component, ws : Workstation | c1.workstation = ws and c2.workstation = ws } for 4 everyComponentInOneWorkstation expect 1",
+                "run { some c : Component | no c.workstation } for 4 everyComponentInOneWorkstation expect 0",
+                "run { some c : Component | some disj ws1, ws2 : Workstation | ws1 in c.workstation and ws2 in c.workstation } for 4 everyComponentInOneWorkstation expect 0",
+                "run { one c : Component | no c.workstation } for 4 everyComponentInOneWorkstation expect 0",
+                "run { one c : Component | some disj ws1, ws2 : Workstation | c.workstation = ws1 + ws2 } for 4 everyComponentInOneWorkstation expect 0",
+                "run { some Component and (all c : Component | no c.workstation) } for 4 everyComponentInOneWorkstation expect 0"
+            ]
+        },
+        "this/inv4": {
+            "valid": [
+                "run Negative1 {\n  some c: Component | c.parts = none\n  all m: Material | m.parts = none\n} for 4 expect 1",
+                "run Negative2 {\n  all c: Component | c.parts != none\n  some m: Material | m.parts != none\n} for 4 expect 1",
+                "run Negative3 {\n  some c: Component | c.parts = none\n  some m: Material | m.parts != none\n} for 4 expect 1"
+            ],
+            "parse": [
+                "run Negative4 {\n  some c_violating: Component | c_violating.parts = none\n  some c_satisfying: Component | c_satisfying.parts != none and c_violating != c_satisfying\n  all m: Material | m.parts = none\n} for 4 expect 1",
+                "run Negative5 {\n  some m_violating: Material | m_violating.parts != none\n  some m_satisfying: Material | m_satisfying.parts = none and m_violating != m_satisfying\n  all c: Component | c.parts != none\n} for 4 expect 1"
+            ]
+        },
+        "this/inv5": {
+            "parse": [
+                "run P1_NoWorkers {\n  NoHumansAndRobotsTogether\n  no Worker\n} for 4 expect 1",
+                "run P2_OnlyHumans {\n  NoHumansAndRobotsTogether\n  some Workstation\n  some Human\n  no Robot\n} for 4 expect 1",
+                "run P3_OnlyRobots {\n  NoHumansAndRobotsTogether\n  some Workstation\n  no Human\n  some Robot\n} for 4 expect 1",
+                "run P4_SegregatedWorkstations {\n  NoHumansAndRobotsTogether\n  some Workstation\n  some Human\n  some Robot\n  // Explicitly ensure no workstation has both human and robot workers\n  all w: Workstation | (some w.workers & Human implies no w.workers & Robot)\n} for 4 expect 1",
+                "run P5_EmptyAndSegregated {\n  NoHumansAndRobotsTogether\n  some w1: Workstation | no w1.workers // At least one empty workstation\n  some w2: Workstation | some w2.workers & Human and no w2.workers & Robot // At least one workstation with only humans\n  some w3: Workstation | some w3.workers & Robot and no w3.workers & Human // At least one workstation with only robots\n  some Human\n  some Robot\n} for 4 expect 1",
+                "run N1_OneMixedWorkstation {\n  not NoHumansAndRobotsTogether\n  some w: Workstation | some w.workers & Human and some w.workers & Robot // At least one workstation has both\n} for 4 expect 0",
+                "run N2_AllWorkstationsMixed {\n  not NoHumansAndRobotsTogether\n  some Human\n  some Robot\n  all w: Workstation | some w.workers & Human and some w.workers & Robot // All workstations have both\n} for 4 expect 0",
+                "run N3_ComplexMixed {\n  not NoHumansAndRobotsTogether\n  some w_mixed: Workstation | some w_mixed.workers & Human and some w_mixed.workers & Robot // At least one mixed workstation\n  some w_human: Workstation | some w_human.workers & Human and no w_human.workers & Robot // At least one human-only workstation\n  some w_robot: Workstation | some w_robot.workers & Robot and no w_robot.workers & Human // At least one robot-only workstation\n  some Human\n  some Robot\n} for 4 expect 0",
+                "run N4_MinimalFailure {\n  not NoHumansAndRobotsTogether\n  one w: Workstation |\n    one h: Human, one r: Robot |\n    w.workers = h + r\n  no (Workstation - w) // Ensure only one workstation exists\n  no (Human - h) // Ensure only one human exists\n  no (Robot - r) // Ensure only one robot exists\n  no (Worker - (h+r)) // No other workers\n} for 4 expect 0",
+                "run N5_TwoEachMixed {\n  not NoHumansAndRobotsTogether\n  some w: Workstation |\n    let humans_at_w = w.workers & Human, robots_at_w = w.workers & Robot |\n    #humans_at_w >= 2 and #robots_at_w >= 2\n} for 4 expect 0"
+            ]
+        },
+        "this/inv6": {
+            "parse": [
+                "run {\n    one c: Component\n    one m: Material\n    c.parts = c + m // c is in c.parts\n} for 4 expect 0",
+                "run {\n    one c: Component\n    one w: Workstation\n    one human: Human\n    c.workstation = w\n    w.workers = human\n    c in c.parts // Violation\n} for 4 expect 0",
+                "run {\n    let c1, c2, c3: Component |\n    c1 in c1.parts and c2 !in c2.parts and c3 !in c3.parts\n} for 4 expect 0",
+                "run {\n    one c: Component\n    c.parts = none\n} for 4 expect 1",
+                "run {\n    one c1, c2: Component\n    one m: Material\n    c1.parts = c2 + m // c1 is not c2 or m\n    c2.parts = m // c2 is not m\n} for 4 expect 1",
+                "run {\n    one ws: Workstation\n    one worker: Worker\n    one dangerous: Dangerous\n    one c1, c2, c3: Component\n\n    ws.workers = worker\n    c1.workstation = ws\n    c2.workstation = ws\n    c3.workstation = ws\n\n    c1.parts = c2 + dangerous // c1 not in {c2, dangerous}\n    c2.parts = c3 // c2 not in {c3}\n    c3.parts = none // c3 not in {}\n} for 4 expect 1"
+            ]
+        },
+        "this/inv8": {
+            "previous": [
+                "run {\n  some Dangerous\n  some Component\n  some Human\n  no Workstation.workers & Human\n} for 4 expect 1"
+            ],
+            "parse": [
+                "run {\n  some c : Dangerous & Component\n  some ws : c.workstation\n  some h : Human\n  h in ws.workers\n} for 4 expect 0",
+                "run {\n  some c : Dangerous & Component\n  some ws : c.workstation\n  some h : Human\n  some r : Robot\n  h in ws.workers\n  r in ws.workers\n} for 4 expect 0",
+                "run {\n  some c : Dangerous & Component\n  some ws1, ws2 : Workstation | ws1 != ws2\n  some h : Human\n  c.workstation = ws1 + ws2\n  h in ws1.workers\n  // ws2 might not have humans, but the violation is still true due to ws1\n} for 4 expect 0",
+                "run {\n  some c1, c2 : Dangerous & Component | c1 != c2\n  some ws1, ws2 : Workstation | ws1 != ws2\n  some h1, h2 : Human | h1 != h2\n  c1.workstation = ws1\n  c2.workstation = ws2\n  h1 in ws1.workers\n  h2 in ws2.workers\n} for 4 expect 0",
+                "run {\n  some c_human : Dangerous & Component\n  some ws_human : Workstation\n  some h : Human\n  c_human.workstation = ws_human\n  h in ws_human.workers\n\n  some c_robot : Dangerous & Component - c_human\n  some ws_robot : Workstation - ws_human\n  some r : Robot\n  c_robot.workstation = ws_robot\n  ws_robot.workers = r\n} for 4 expect 0"
+            ]
+        },
+        "this/inv9": {
+            "parse": [
+                "run {\n    singleLineWorkstations\n    #(Workstation - (begin + end)) = 0\n} for 4 expect 1",
+                "run {\n    singleLineWorkstations\n    #(Workstation - (begin + end)) = 1\n} for 4 expect 1",
+                "run {\n    singleLineWorkstations\n    #(Workstation - (begin + end)) = 2\n} for 4 expect 1",
+                "run {\n    singleLineWorkstations\n    #(Workstation - (begin + end)) = 2\n} for 4 expect 1",
+                "run {\n    // Ensure there are at least two distinct predecessors for 'end'.\n    some disj p1, p2 : Workstation - end |\n        p1.succ = end and p2.succ = end\n        // Additionally, ensure p1 and p2 are distinct from begin,\n        // unless begin itself has two successors leading to end (which would be a fork).\n        // This ensures the merge is from two *different* points.\n        p1 != p2\n} for 4 expect 0",
+                "run {\n    // Find an isolated workstation that is neither begin nor end.\n    some w_isolated : Workstation - (begin + end) |\n        no w_isolated in begin.*succ\n        // Also ensure begin and end form a line, to make it a clear isolated case.\n        and begin.succ = end\n        and no ^succ.begin\n        and no end.succ\n} for 4 expect 0"
+            ]
+        },
+        "this/inv10": {
+            "parse": [
+                "run {\n  no Component.parts & Component\n  partsAssembledBeforeComponent\n} for 4 expect 1",
+                "run {\n  one c : Component, p : Component, w1, w2 : Workstation {\n    p in c.parts\n    c.parts = p // C has exactly one part, P\n    p.workstation = w1\n    c.workstation = w2\n    w1.succ = w2 // W1 -> W2 (W1 precedes W2)\n    no w2.succ // W2 is the end of this line segment\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 1",
+                "run {\n  one c : Component, p : Component, w : Workstation {\n    p in c.parts\n    c.parts = p\n    p.workstation = w\n    c.workstation = w\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 1",
+                "run {\n  one c : Component {\n    some p1, p2 : Component - c {\n      p1 in c.parts\n      p2 in c.parts\n      c.parts = p1 + p2\n    }\n    some w1, w2, w3 : Workstation {\n      p1.workstation = w1\n      p2.workstation = w2\n      c.workstation = w3\n      // W1 -> W3, W2 -> W3 (P1 and P2 assembled before C)\n      w1.succ = w3\n      w2.succ = w3\n      no w3.succ\n      w1 != w2\n      w1 != w3\n      w2 != w3\n    }\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 1",
+                "run {\n  one c : Component, p : Component {\n    p in c.parts\n    no (p <: Component).workstation // P has no workstation\n    c.workstation = Workstation - end // C has a workstation (not relevant to this positive case logic)\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 1",
+                "run {\n  one c : Component, p : Component, w1, w2 : Workstation {\n    p in c.parts\n    c.parts = p\n    c.workstation = w1 // Component at W1\n    p.workstation = w2 // Part at W2\n    w1.succ = w2 // W1 -> W2, so C is assembled before P. Violation!\n    w1 != w2\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 0",
+                "run {\n  one c : Component, p : Component, w1, w2, w3, w4 : Workstation {\n    p in c.parts\n    c.parts = p\n    c.workstation = w1 // Component at W1\n    p.workstation = w3 // Part at W3\n    // Production line: W1 -> W2, and W3 -> W4. W1 and W3 are disconnected.\n    // So W3 is not in W1.*(~succ)\n    w1.succ = w2\n    w3.succ = w4\n    no w2.succ\n    no w4.succ\n    all distinct w1, w2, w3, w4\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 0",
+                "run {\n  one c : Component {\n    some p1, p2 : Component - c {\n      p1 in c.parts\n      p2 in c.parts\n      c.parts = p1 + p2\n    }\n    some w1, w2, w3 : Workstation {\n      p1.workstation = w1 // P1 at W1\n      p2.workstation = w2 // P2 at W2\n      c.workstation = w3 // C at W3\n\n      // W1 -> W3 (P1 assembled before C) -- OK\n      w1.succ = w3\n\n      // W3 -> W2 (P2 assembled after C) -- VIOLATION\n      w3.succ = w2\n\n      no w2.succ // end of line\n      all distinct w1, w2, w3\n    }\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 0",
+                "run {\n  one c : Component, p : Component, w_c, w_inter, w_p : Workstation {\n    p in c.parts\n    c.parts = p\n    c.workstation = w_c\n    p.workstation = w_p\n    // Production line: w_c -> w_inter -> w_p (w_p is a strict descendant of w_c)\n    w_c.succ = w_inter\n    w_inter.succ = w_p\n    no w_p.succ\n    all distinct w_c, w_inter, w_p\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 0",
+                "run {\n  one c : Component, p : Component {\n    p in c.parts\n    c.parts = p\n    c.workstation = begin\n    p.workstation = end\n    // Assuming 'end' is not 'begin' and 'end' is not an ancestor of 'begin'.\n    // With default scopes and no succ relation, 'begin' and 'end' are distinct\n    // and disconnected, satisfying 'end !in begin.*(~succ)'.\n  }\n  partsAssembledBeforeComponent\n} for 4 expect 0"
+            ]
+        }
+    },
+    "Train station": {
+        "this/inv3": {
+            "parse": [
+                "run {\n  one e: Entry, x: Exit |\n    e.succs = x\n    no x.succs\n    #Track = 2\n    no Junction\n    no (Track - (e+x))\n  Exit = {t: Track | no t.succs}\n} for 4 expect 1",
+                "run {\n  one t1, t2, t3, t4: Track |\n    t1.succs = t2\n    no t2.succs\n    t3.succs = t4\n    no t4.succs\n    #Track = 4\n    no Entry and no Junction\n    (t2+t4) in Exit // These are explicitly Exit tracks\n    (Track - (t2+t4)) not in Exit // Others are not Exit\n  Exit = {t: Track | no t.succs}\n} for 4 expect 1",
+                "run {\n  one e: Entry, j: Junction, x: Exit, t_other: Track |\n    e.succs = j\n    j.succs = x + t_other\n    no x.succs\n    no t_other.succs\n    #Track = 4\n    (x + t_other) in Exit and (Track - (x+t_other)) not in Exit\n  Exit = {t: Track | no t.succs}\n} for 4 expect 1",
+                "run {\n  one x: Exit, t: Track |\n    x.succs = t // x is an Exit but has a successor t\n    #Track = 2\n    no (Track - (x+t))\n} for 4 expect 0",
+                "run {\n  one t_no_succ: Track |\n    no t_no_succ.succs // t_no_succ has no successor\n    t_no_succ not in Exit // but it's not an Exit track\n    #Track = 2\n    no (Track - t_no_succ)\n} for 4 expect 0",
+                "run {\n  one x: Exit, t1: Track, t2: Track |\n    x.succs = t1      // x is Exit but has successor t1\n    no t2.succs       // t2 has no successor\n    t2 not in Exit    // but t2 is not Exit\n    #Track = 3\n    no (Track - (x+t1+t2))\n} for 4 expect 0",
+                "run {\n  all t: Track | t in Exit // All tracks are Exit\n  one t1, t2: Track |\n    t1.succs = t2         // One Exit track (t1) has a successor (t2)\n    #Track = 2\n    no (Track - (t1+t2))\n} for 4 expect 0",
+                "run {\n  one e: Entry |\n    no e.succs // An Entry track has no successor\n    e not in Exit // An Entry track is not an Exit track (regardless of disjointness)\n    #Track = 1\n    no (Track - e)\n} for 4 expect 0"
+            ],
+            "previous": [
+                "run {\n  all t: Track | some t.succs\n  #Track = 3\n  Exit = {t: Track | no t.succs}\n} for 4 expect 1"
+            ]
+        },
+        "this/inv4": {
+            "previous": [
+                "run {\n  no Entry\n  some Track // Ensure there are some tracks\n} for 4 expect 1"
+            ],
+            "parse": [
+                "run {\n  one e: Entry\n  no e.(~succs) // The Entry track has no predecessors\n  some Track - Entry // Allow other tracks to exist\n  no succs // Simplistic: no connections at all\n} for 4 expect 1",
+                "run {\n  one e: Entry\n  one j: Junction\n  one x: Exit\n  e.succs = j\n  j.succs = x\n  no x.succs // The Exit track has no successors\n  // 'e' is the only Entry track and it has no predecessors by definition of the graph.\n} for 4 expect 1",
+                "run {\n  some t1, t2: Entry, t3: Junction, t4: Exit\n  all e: Entry | no e.(~succs) // Explicitly state the condition\n  t1.succs = t3\n  t2.succs = t4\n  t3.succs = t4\n  // t1 and t2 are Entry and have no predecessors. t3 and t4 have predecessors.\n} for 4 expect 1",
+                "run {\n  one e: Entry\n  one j: Junction\n  j.succs = e // 'e' (an Entry track) has 'j' as a predecessor\n} for 4 expect 0",
+                "run {\n  one e: Entry\n  e.succs = e // 'e' (an Entry track) has itself as a predecessor\n  no Track - Entry // Simplify to only this Entry track\n} for 4 expect 0",
+                "run {\n  some e1, e2: Entry | e1 != e2\n  e1.succs = e2 // 'e2' (an Entry track) has 'e1' as a predecessor\n} for 4 expect 0",
+                "run {\n  one e: Entry\n  one j: Junction\n  e.succs = j\n  j.succs = e // 'e' (an Entry track) has 'j' as a predecessor, forming a cycle\n} for 4 expect 0",
+                "run {\n  some t1, t2: Entry | t1 != t2\n  one j: Junction\n  j.succs = t1 + t2 // Both 't1' and 't2' (Entry tracks) have 'j' as a predecessor\n} for 4 expect 0"
+            ]
+        },
+        "this/inv5": {
+            "parse": [
+                "run {\n  exactly 4 Track\n  no Junction // No tracks are junctions\n  Track0.succs = Track1\n  Track1.succs = Track2\n  Track2.succs = Track3\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 1",
+                "run {\n  exactly 4 Track\n  Junction = Track3 // Track3 is the only junction\n  Track0.succs = Track3\n  Track1.succs = Track3\n  Track3.succs = Track2\n  no Track2.succs\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 1",
+                "run {\n  exactly 4 Track\n  Junction = Track3 // Track3 is the only junction\n  Track0.succs = Track3\n  Track1.succs = Track3\n  Track2.succs = Track3\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 1",
+                "run {\n  exactly 4 Track\n  Junction = Track0 + Track1 // Track0 and Track1 are junctions\n  Track2.succs = Track0 + Track1\n  Track3.succs = Track0 + Track1\n  no Track0.succs\n  no Track1.succs\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 1",
+                "run {\n  exactly 4 Track\n  Junction = Track3 // Track3 is the only junction\n  Track0.succs = Track3\n  Track1.succs = Track3\n  Track2.succs = Track3\n  Track3.succs = Track2 // A cycle, T2 is a predecessor of T3, and T3 is a successor of T2\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 1",
+                "run {\n  exactly 4 Track\n  Junction = Track0 // Track0 is a junction\n  Track0.succs = Track1\n  Track1.succs = Track2\n  Track2.succs = Track3\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 0",
+                "run {\n  exactly 4 Track\n  Junction = Track1 // Track1 is a junction\n  Track0.succs = Track1\n  Track1.succs = Track2\n  Track2.succs = Track3\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 0",
+                "run {\n  exactly 4 Track\n  no Junction // No tracks are junctions\n  Track0.succs = Track2\n  Track1.succs = Track2\n  Track2.succs = Track3\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 0",
+                "run {\n  exactly 4 Track\n  no Junction // No tracks are junctions\n  Track0.succs = Track3\n  Track1.succs = Track3\n  Track2.succs = Track3\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 0",
+                "run {\n  exactly 4 Track\n  Junction = Track0 // Track0 is a junction\n  Track1.succs = Track0\n  Track2.succs = Track3\n  Track1.succs = Track3 // T3 has predecessors T1 and T2\n  no Track0.succs\n  no Track.signals\n  all t: Track | t in Junction <=> (#(t.(Track <: succs)) > 1)\n} for 4 expect 0"
+            ]
+        },
+        "this/inv6": {
+            "parse": [
+                "run {\n  one Entry\n  one Speed\n  Entry.signals = Speed\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 1",
+                "run {\n  two Entry\n  two Speed\n  Entry.first.signals = Speed.first\n  Entry.last.signals = Speed.last\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 1",
+                "run {\n  one Entry\n  one Speed\n  one Semaphore\n  Entry.signals = Speed + Semaphore\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 1",
+                "run {\n  no Entry\n  // Can optionally include other tracks or signals, they don't affect the requirement's truth value here.\n  one Junction\n  one Speed\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 1",
+                "run {\n  one Entry\n  one Junction\n  one Exit\n  one Speed\n  Entry.signals = Speed\n  Junction.signals = no Signal // Junctions don't need speed signals\n  Exit.signals = no Signal    // Exits don't need speed signals\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 1",
+                "run {\n  one Entry\n  Entry.signals = no Signal\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 0",
+                "run {\n  one Entry\n  one Semaphore\n  Entry.signals = Semaphore\n  no Speed // Ensure no Speed signal exists anywhere for clear failure\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 0",
+                "run {\n  one Entry\n  one Speed\n  // Explicitly state that no Speed signal is part of the Entry track's signals\n  no (Entry.signals & Speed)\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 0",
+                "run {\n  two Entry\n  let e1 = Entry.first, e2 = Entry.last\n  one Speed\n  one Semaphore\n  e1.signals = Semaphore // This Entry track (e1) has no Speed signal\n  e2.signals = Speed     // This Entry track (e2) does have a Speed signal\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 0",
+                "run {\n  one Entry\n  one Junction\n  one Speed\n  one Semaphore\n  Entry.signals = Semaphore // Entry track has a Semaphore signal but no Speed signal\n  Junction.signals = Speed  // Speed signal exists, but only on the Junction track\n  (all e: Entry | some s: e.signals & Speed)\n} for 4 expect 0"
+            ]
+        },
+        "this/inv7": {
+            "parse": [
+                "run {\n    no Track\n    noCycles\n} for 4 expect 1",
+                "run {\n    one t: Track\n    no t.succs\n    noCycles\n} for 4 expect 1",
+                "run {\n    some disj t1, t2, t3: Track {\n        t1.succs = t2\n        t2.succs = t3\n        no t3.succs\n        all t: Track - t1 - t2 - t3 | no t.succs\n    }\n    noCycles\n} for 4 expect 1",
+                "run {\n    some disj t1, t2, t3: Track {\n        t1.succs = t2 + t3\n        no t2.succs\n        no t3.succs\n        all t: Track - t1 - t2 - t3 | no t.succs\n    }\n    noCycles\n} for 4 expect 1",
+                "run {\n    some disj t1, t2, t3, t4: Track {\n        t1.succs = t2 + t3\n        t2.succs = t4\n        t3.succs = t4\n        no t4.succs\n        all t: Track - t1 - t2 - t3 - t4 | no t.succs\n    }\n    noCycles\n} for 4 expect 1",
+                "run {\n    one t: Track\n    t.succs = t\n    hasCycles\n} for 4 expect 0",
+                "run {\n    some disj t1, t2: Track {\n        t1.succs = t2\n        t2.succs = t1\n        all t: Track - t1 - t2 | no t.succs\n    }\n    hasCycles\n} for 4 expect 0",
+                "run {\n    some disj t1, t2, t3: Track {\n        t1.succs = t2\n        t2.succs = t3\n        t3.succs = t1\n        all t: Track - t1 - t2 - t3 | no t.succs\n    }\n    hasCycles\n} for 4 expect 0",
+                "run {\n    some disj t1, t2, t3, t4: Track {\n        t1.succs = t2 + t4 // t1 points to t2 (part of cycle) and t4 (external)\n        t2.succs = t3\n        t3.succs = t1 // Cycle: t1 -> t2 -> t3 -> t1\n        no t4.succs\n        all t: Track - t1 - t2 - t3 - t4 | no t.succs\n    }\n    hasCycles\n} for 4 expect 0",
+                "run {\n    some disj t1, t2, t3, t4: Track {\n        t1.succs = t2\n        t2.succs = t3\n        t3.succs = t4\n        t4.succs = t2 // Cycle: t2 -> t3 -> t4 -> t2\n        all t: Track - t1 - t2 - t3 - t4 | no t.succs\n    }\n    hasCycles\n} for 4 expect 0"
+            ]
+        },
+        "this/inv9": {
+            "parse": [
+                "run {\n  // Positive Instance 1: All tracks are followed by junctions.\n  // The antecedent \"Tracks not followed by junctions\" is false for all tracks,\n  // making the implication vacuously true for all tracks.\n  one sig t1, t2, t3, t4 extends Track {}\n  one sig j1, j2, j3, j4 extends Junction {}\n  one sig s1, s2, s3, s4 extends Semaphore {}\n\n  // Every track is followed by at least one junction\n  all t: Track | some t.succs & Junction\n\n  // Define specific succs relations\n  t1.succs = j1\n  t2.succs = j2\n  t3.succs = j3\n  t4.succs = j4\n\n  // Tracks can have semaphores; it doesn't violate the rule as they are followed by junctions\n  t1.signals = s1\n  t2.signals = s2\n  t3.signals = s3\n  t4.signals = s4\n} for 4 expect 1",
+                "run {\n  // Positive Instance 2: No tracks are followed by junctions AND no tracks have semaphores.\n  // The antecedent \"Tracks not followed by junctions\" is true for all tracks,\n  // and the consequent \"do not have semaphores\" is also true for all tracks.\n  // Thus, \"true => true\" holds.\n  one sig t1, t2, t3, t4 extends Track {}\n  \n  // Ensure no Junctions exist in the model, or no Track leads to one.\n  no Junction\n\n  // Ensure no Semaphores exist on any track.\n  all t: Track | no t.signals & Semaphore\n\n  // Example succs relations (can point to other Tracks, but not Junctions)\n  t1.succs = t2\n  t2.succs = t3\n  t3.succs = t4\n  t4.succs = t1\n} for 4 expect 1",
+                "run {\n  // Positive Instance 3: Mixed scenario where all tracks satisfy the requirement.\n  // t1: Followed by junction (antecedent false) => implication true.\n  // t2: Not followed by junction AND no semaphore (antecedent true, consequent true) => implication true.\n  one sig t1, t2, t3, t4 extends Track {}\n  one sig j1, j2 extends Junction {}\n  one sig sem1 extends Semaphore {}\n  one sig speed1 extends Speed {}\n\n  // t1: Followed by a junction, can have a semaphore (antecedent false)\n  t1.succs = j1\n  t1.signals = sem1\n\n  // t2: Not followed by a junction, has no semaphores (antecedent true, consequent true)\n  no t2.succs & Junction\n  no t2.signals & Semaphore\n\n  // t3: Followed by a junction, has no semaphores (antecedent false)\n  t3.succs = j2\n  t3.signals = speed1\n\n  // t4: Not followed by a junction, has no semaphores (antecedent true, consequent true)\n  no t4.succs & Junction\n  no t4.signals & Semaphore\n} for 4 expect 1",
+                "run {\n  // Positive Instance 4: There are no Semaphores in the model.\n  // The consequent \"do not have semaphores\" is always true for any track 't',\n  // making the implication \"P => true\" always true, regardless of 'P'.\n  one sig t1, t2, t3, t4 extends Track {}\n  one sig j1, j2 extends Junction {}\n  one sig speed1 extends Speed {}\n\n  no Semaphore // Explicitly state that no Semaphores exist\n\n  // Tracks can be followed by junctions or not, it doesn't matter for the implication.\n  t1.succs = j1\n  t2.succs = t3 // Not followed by junction\n  t3.succs = j2\n  t4.succs = t1 // Not followed by junction\n\n  // Tracks can have other signals\n  t1.signals = speed1\n  t2.signals = none\n  t3.signals = speed1\n  t4.signals = none\n} for 4 expect 1",
+                "run {\n  // Positive Instance 5: There are no Junctions in the model, and no track has a semaphore.\n  // The antecedent \"Tracks not followed by junctions\" is always true for any track 't'.\n  // For the implication \"true => Q\" to hold, 'Q' must be true for all tracks.\n  // So, all tracks must not have semaphores.\n  one sig t1, t2, t3, t4 extends Track {}\n  one sig sem1 extends Semaphore {} // Semaphores can exist, but not on tracks\n\n  no Junction // Explicitly state that no Junctions exist\n\n  // All tracks must not have semaphores for the requirement to hold.\n  all t: Track | no t.signals & Semaphore\n\n  // Example succs relations (can point to other Tracks, not Junctions)\n  t1.succs = t2\n  t2.succs = t3\n  t3.succs = t4\n  t4.succs = none\n} for 4 expect 1",
+                "run {\n  // Negative Instance 1: A track (t1) is NOT followed by any junction, but DOES have a semaphore.\n  // This directly violates the requirement.\n  one sig t1, t2, t3, t4 extends Track {}\n  one sig j1 extends Junction {}\n  one sig sem1 extends Semaphore {}\n  one sig speed1 extends Speed {}\n\n  // t1: The violating track\n  no t1.succs & Junction // t1 is not followed by a Junction\n  t1.signals = sem1      // t1 has a Semaphore\n\n  // Other tracks can satisfy or violate the requirement, but one violation is enough to fail.\n  t2.succs = j1 // t2 is followed by a junction\n  t2.signals = speed1\n\n  t3.succs = t4 // t3 is not followed by a junction (assuming t4 is not a Junction)\n  no t3.signals & Semaphore // t3 does not have a semaphore\n\n  t4.succs = j1 // t4 is followed by a junction\n  t4.signals = sem1\n} for 4 expect 0",
+                "run {\n  // Negative Instance 2: A minimal scenario where a single track (e1, an Entry track)\n  // is not followed by a junction but has a semaphore.\n  one sig e1 extends Entry {} // e1 is a Track\n  one sig t1, t2, t3 extends Track {}\n  one sig s1 extends Semaphore {}\n\n  // e1 is not followed by any Junction\n  no e1.succs & Junction\n  // e1 has a semaphore\n  e1.signals = s1\n\n  // Set e1's successors to non-Junctions (e.g., other Tracks or empty)\n  e1.succs = t1\n  t1.succs = t2\n  t2.succs = t3\n  t3.succs = e1\n  \n  // Ensure no Junctions exist that could be a successor\n  no Junction\n} for 4 expect 0",
+                "run {\n  // Negative Instance 3: All tracks are not followed by junctions AND all tracks have semaphores.\n  // This means the implication fails for every track.\n  one sig t1, t2, t3, t4 extends Track {}\n  one sig sem1, sem2, sem3, sem4 extends Semaphore {}\n\n  no Junction // No Junctions exist in the model\n  \n  // All tracks have semaphores\n  t1.signals = sem1\n  t2.signals = sem2\n  t3.signals = sem3\n  t4.signals = sem4\n\n  // Set succs to point to other Tracks, not Junctions.\n  t1.succs = t2\n  t2.succs = t3\n  t3.succs = t4\n  t4.succs = t1\n} for 4 expect 0",
+                "run {\n  // Negative Instance 4: A track that only leads to an Exit track, but has a Semaphore.\n  // An Exit track is a Track, but not a Junction.\n  one sig t1, t2, t3 extends Track {}\n  one sig e1 extends Exit {} // e1 is a Track, not a Junction\n  one sig sem1 extends Semaphore {}\n  one sig j1 extends Junction {}\n\n  // t1 is followed by e1 (an Exit track)\n  t1.succs = e1\n  // Ensure t1 is explicitly not followed by any Junction (e1 is not a Junction)\n  no t1.succs & Junction\n\n  // t1 has a semaphore\n  t1.signals = sem1\n\n  // Other model elements to fill scope\n  j1.succs = t2\n  t2.succs = t3\n  t3.succs = j1\n  e1.succs = none\n} for 4 expect 0",
+                "run {\n  // Negative Instance 5: A track that has no successors at all, but has a Semaphore.\n  // If a track has no successors, it is certainly not followed by a junction.\n  one sig t1, t2, t3, t4 extends Track {}\n  one sig sem1 extends Semaphore {}\n  one sig j1 extends Junction {}\n\n  // t1 has no successors\n  t1.succs = none\n  // This implies 'no t1.succs & Junction' is true.\n\n  // t1 has a semaphore\n  t1.signals = sem1\n\n  // Other tracks and junctions to fill the scope and possibly satisfy the rule.\n  j1.succs = t2\n  t2.succs = t3\n  t3.succs = t4\n  t4.succs = j1\n  all t: (Track - t1) | no t.signals & Semaphore // Make other tracks satisfy if not followed by junction\n} for 4 expect 0"
+            ]
+        },
+        "this/inv10": {
+            "parse": [
+                "run {\n  no t: Track | t.succs & Junction\n  some t1, t2: Track - Junction\n  some j1: Junction\n  t1.succs = t2 // Example: a path not involving junctions\n  j1.succs = none // Junction exists but nothing leads to it\n} for 4 expect 1",
+                "run {\n  one t1: Track - Junction\n  one j1: Junction\n  one s1: Semaphore\n  t1.succs = j1\n  t1.signals = s1\n} for 4 expect 1",
+                "run {\n  some t1, t2: Track - Junction\n  some j1, j2: Junction\n  j1 != j2\n  some s1, s2: Semaphore\n  s1 != s2\n  t1.succs = j1\n  t1.signals = s1\n\n  t2.succs = j2\n  t2.signals = s2\n\n  // Ensure other tracks (if any in scope 4) also comply,\n  // or don't lead to junctions.\n  // E.g., a track that leads nowhere or to another non-junction track\n  (Track - (t1 + t2 + j1 + j2)).succs = none\n} for 4 expect 1",
+                "run {\n  one t1: Track - Junction\n  one j1: Junction\n  one t2: Track - Junction // Another track as successor, not a junction\n  one s1: Semaphore\n  t1.succs = j1 + t2 // t1 leads to j1 (junction) and t2 (non-junction)\n  t1.signals = s1\n} for 4 expect 1",
+                "run {\n  one t1: Track - Junction\n  some j1, j2: Junction\n  j1 != j2 // Ensure two distinct junctions\n  one s1: Semaphore\n  t1.succs = j1 + j2 // t1 leads to both J1 and J2\n  t1.signals = s1\n} for 4 expect 1",
+                "run {\n  one t1: Track - Junction\n  one j1: Junction\n  t1.succs = j1\n  t1.signals = none // t1 has no signals, so no semaphore\n} for 4 expect 0",
+                "run {\n  one t1: Track - Junction\n  one j1: Junction\n  one sp1: Speed\n  t1.succs = j1\n  t1.signals = sp1 // t1 has a Speed signal, but no Semaphore\n} for 4 expect 0",
+                "run {\n  some t1, t2: Track - Junction\n  some j1, j2: Junction\n  j1 != j2\n  one s1: Semaphore // For t1\n  one sp1: Speed   // For t2, causing violation\n  t1.succs = j1\n  t1.signals = s1 // t1 complies\n\n  t2.succs = j2\n  t2.signals = sp1 // t2 violates the rule\n} for 4 expect 0",
+                "run {\n  one e1: Entry\n  one j1: Junction\n  e1.succs = j1\n  e1.signals = none // e1 has no signals, violating the rule\n} for 4 expect 0",
+                "run {\n  one t1: Track - Junction\n  one j1: Junction\n  one t2: Track - Junction // Another track as successor, not a junction\n  t1.succs = j1 + t2 // t1 leads to j1 (junction) and t2 (non-junction)\n  t1.signals = none  // t1 has no signals, violating the rule\n} for 4 expect 0"
+            ]
+        }
+    },
+    "Courses": {
+        "this/inv1": {
+            "parse": [
+                "run {\n  some s: Student, c: Course | s in c.enrolled\n  all p: Person, co: Course | p in co.enrolled implies (p=s and co=c)\n} for 4 expect 1"
             ],
             "consistent": [
-                "run {\n  some u: User | u in u.follows // This forces a violation of the requirement\n  all x: User | x not in x.follows // This is the requirement itself, creating a contradiction\n} for 4 expect 0",
-                "run {\n  some disj u1, u2: User {\n    u1 in u1.follows // Forces a violation\n    u2 in u1.follows // Additional relation\n  }\n  all x: User | x not in x.follows // Contradiction\n} for 4 expect 0",
-                "run {\n  some i: Influencer | i in i.follows // Forces a violation by an Influencer\n  all x: User | x not in x.follows // Contradiction\n} for 4 expect 0"
+                "run {\n  some s1, s2: Student, c1, c2: Course |\n  s1 in c1.enrolled and s2 in c2.enrolled and (s1 != s2 or c1 != c2)\n  no Professor.enrolled\n} for 4 expect 1",
+                "run {\n  some Professor\n  some Student\n  some s: Student, c: Course | s in c.enrolled\n  no Professor.enrolled\n} for 4 expect 1",
+                "run {\n  some p: Professor, c: Course | p in c.enrolled\n  no Student\n} for 4 expect 0",
+                "run {\n  some prof: Professor, s: Student, c: Course |\n  prof in c.enrolled and s in c.enrolled\n} for 4 expect 0",
+                "run {\n  some p1, p2: Professor, c1, c2: Course |\n  p1 in c1.enrolled and p2 in c2.enrolled and (p1 != p2 or c1 != c2)\n  no Student.enrolled\n} for 4 expect 0",
+                "run {\n  some p: Professor, c: Course | p in c.enrolled and p in c.teaches\n} for 4 expect 0"
             ],
             "valid": [
-                "run {\n  all u: User | u in u.follows // Forces all users to violate\n  all x: User | x not in x.follows // Contradiction\n} for 4 expect 0"
+                "run {\n  all p: Professor | some c: Course | p in c.enrolled\n} for 4 expect 0"
+            ]
+        },
+        "this/inv3": {
+            "parse": [
+                "run {\n  // P1: Minimal valid case: one course, one person, the person teaches the course.\n  one c: Course\n  one p: Person\n  p.teaches = c\n  CoursesMustHaveTeachers\n} for 4 expect 1",
+                "run {\n  // P2: Multiple courses, each taught by a distinct teacher.\n  #Course = 2\n  #Person = 2\n  Person[0].teaches = Course[0]\n  Person[1].teaches = Course[1]\n  CoursesMustHaveTeachers\n} for 4 expect 1",
+                "run {\n  // P3: Multiple courses, some taught by multiple teachers, all courses covered.\n  #Course = 2\n  #Person = 2\n  Person[0].teaches = Course[0] + Course[1] // Person[0] teaches both\n  Person[1].teaches = Course[1]             // Person[1] also teaches Course[1]\n  CoursesMustHaveTeachers\n} for 4 expect 1",
+                "run {\n  // P4: There are teachers who teach nothing, but all courses are still covered by others.\n  #Course = 1\n  #Person = 2\n  Person[0].teaches = Course[0] // Course[0] is taught by Person[0]\n  no Person[1].teaches          // Person[1] teaches nothing\n  CoursesMustHaveTeachers\n} for 4 expect 1",
+                "run {\n  // P5: No courses exist (vacuously true: \"all courses...\" is true if there are no courses).\n  no Course\n  CoursesMustHaveTeachers\n} for 4 expect 1",
+                "run {\n  // N1: A single course exists, but no person teaches it.\n  one c: Course\n  no Person.teaches // No person teaches any course at all\n  CoursesMustHaveTeachers\n} for 4 expect 0",
+                "run {\n  // N2: Multiple courses exist, some are taught, but at least one specific course is not taught.\n  #Course = 2\n  #Person = 1\n  Person[0].teaches = Course[0] // Course[0] is taught\n  // Course[1] is not in Person[0].teaches, and no other person exists.\n  CoursesMustHaveTeachers\n} for 4 expect 0",
+                "run {\n  // N3: Courses exist, but no persons exist to teach them.\n  some Course\n  no Person\n  CoursesMustHaveTeachers\n} for 4 expect 0",
+                "run {\n  // N4: Courses and persons exist, but all persons teach nothing.\n  some Course\n  some Person\n  no Person.teaches\n  CoursesMustHaveTeachers\n} for 4 expect 0",
+                "run {\n  // N5: Multiple courses and persons, but a specific course is intentionally left untaught.\n  #Course = 3\n  #Person = 2\n  Person[0].teaches = Course[1] // Person[0] teaches Course[1]\n  Person[1].teaches = Course[2] // Person[1] teaches Course[2]\n  // Course[0] is not taught by any person.\n  CoursesMustHaveTeachers\n} for 4 expect 0"
+            ]
+        },
+        "this/inv4": {
+            "parse": [
+                "run {\n  one p: Project, one c: Course |\n  p in c.projects\n} for 4 expect 1",
+                "run {\n  some disj p1, p2: Project, some disj c1, c2: Course |\n  p1 in c1.projects and p2 in c2.projects and\n  no (c1.projects & c2.projects) // Ensures no overlap\n} for 4 expect 1",
+                "run {\n  some p1,p2,p3: Project, some disj c1, c2: Course |\n  p1 in c1.projects and p2 in c1.projects and\n  p3 in c2.projects and\n  c1.projects intersect c2.projects = none // Ensures distinct proposals\n} for 4 expect 1",
+                "run {\n  some Project, one c: Course |\n  all p: Project | p in c.projects\n} for 4 expect 1",
+                "run {\n  no Project, some Course\n} for 4 expect 1",
+                "run {\n  some p: Project, some Course | // Ensure there are projects and courses in general\n  no c: Course | p in c.projects\n} for 4 expect 0",
+                "run {\n  some p: Project, some disj c1, c2: Course |\n  p in c1.projects and p in c2.projects\n} for 4 expect 0",
+                "run {\n  some disj p1,p2: Project, some disj c1, c2: Course |\n  p1 in c1.projects and p1 in c2.projects and // p1 is proposed by two courses\n  p2 in c1.projects and not (p2 in c2.projects) // p2 is proposed by one course\n} for 4 expect 0",
+                "run {\n  some disj p1, p2: Project, some disj c1, c2: Course |\n  (no c: Course | p1 in c.projects) and // p1 is proposed by zero courses\n  p2 in c1.projects and p2 in c2.projects // p2 is proposed by two courses\n} for 4 expect 0",
+                "run {\n  some Project, no Course\n} for 4 expect 0"
+            ]
+        },
+        "this/inv5": {
+            "parse": [
+                "run Positive1 {\n  some Student\n  some Project\n  no Professor\n  Student.projects = Project // The unique student(s) work on all projects\n  Req\n} expect 1",
+                "run Positive2 {\n  some Student\n  some Professor\n  some Project\n  no Professor.projects // Professors do not work on any projects\n  all proj: Project | some s: Student | proj in s.projects // All projects have a student worker\n  Req\n} expect 1",
+                "run Positive3 {\n  some s1, s2: Student | s1 != s2\n  some p1, p2: Project | p1 != p2\n  no Professor\n  // Ensure every project has at least one student working on it\n  all proj: Project | some s: Student | proj in s.projects\n  Req\n} expect 1",
+                "run Positive4 {\n  one s: Student\n  some p1, p2: Project | p1 != p2 // At least two projects\n  no Professor\n  s.projects = Project // The single student works on all projects\n  Req\n} expect 1",
+                "run Positive5 {\n  some s1, s2: Student | s1 != s2\n  some p1, p2: Professor | p1 != p2\n  some pr1, pr2: Project | pr1 != pr2\n  no Professor.projects // Professors are explicitly not working on any projects\n  all pr: Project | some s: Student | pr in s.projects // All projects have at least one student worker\n  Req\n} expect 1",
+                "run Negative1 {\n  some prof: Professor\n  some proj: Project\n  proj in prof.projects // A professor works on a project\n  // Ensure all projects have workers to isolate the first violation\n  all pr: Project | some p: Person | pr in p.projects\n  Req\n} expect 0",
+                "run Negative2 {\n  some proj: Project\n  no p: Person | proj in p.projects // This specific project has no workers\n  no Professor.projects // Ensure only students are involved with other projects, to isolate the second violation\n  Req\n} expect 0",
+                "run Negative3 {\n  some prof: Professor\n  some p1, p2: Project | p1 != p2\n  p1 in prof.projects // Professor works on p1\n  no p: Person | p2 in p.projects // No one works on p2\n  Req\n} expect 0",
+                "run Negative4 {\n  some prof1, prof2: Professor | prof1 != prof2\n  some proj1, proj2: Project | proj1 != proj2\n  proj1 in prof1.projects\n  proj2 in prof2.projects\n  // Ensure all projects have some worker (could be students or professors)\n  all proj: Project | some p: Person | proj in p.projects\n  Req\n} expect 0",
+                "run Negative5 {\n  some s: Student\n  some p1, p2: Project | p1 != p2 // At least two projects\n  no Professor.projects // Ensure \"Only students work on projects\" holds, to isolate the second violation\n  no p: Person | p1 in p.projects // p1 has no workers\n  no p: Person | p2 in p.projects // p2 has no workers\n  Req\n} expect 0"
+            ]
+        },
+        "this/inv8": {
+            "parse": [
+                "run {\n  // Positive Instance 4: A single professor teaches one course and is enrolled in a different course.\n  one p: Professor\n  one c1, c2: Course | c1 != c2\n  p.teaches = c1\n  p.enrolled = c2\n} for 4 expect 1",
+                "run {\n  // Positive Instance 5: A single professor teaches multiple courses and is enrolled in a completely different one.\n  one p: Professor\n  one c1, c2, c3: Course | c1 != c2 and c1 != c3 and c2 != c3\n  p.teaches = c1 + c2\n  p.enrolled = c3\n} for 4 expect 1",
+                "run {\n  // Negative Instance 1: A single professor teaches a course and is enrolled in that same course.\n  one p: Professor\n  one c: Course\n  p.teaches = c\n  p.enrolled = c\n} for 4 expect 0",
+                "run {\n  // Negative Instance 2: A single professor teaches two courses (C1 and C2), and is enrolled in C1 (which she teaches).\n  one p: Professor\n  one c1, c2: Course | c1 != c2\n  p.teaches = c1 + c2\n  p.enrolled = c1\n} for 4 expect 0",
+                "run {\n  // Negative Instance 3: Multiple professors exist, and one of them (p1) teaches herself.\n  some p1, p2: Professor | p1 != p2\n  one c: Course\n  p1.teaches = c\n  p1.enrolled = c\n  // p2's state doesn't prevent the violation by p1\n} for 4 expect 0",
+                "run {\n  // Negative Instance 4: A professor teaches all courses she is enrolled in, and there's more than one such course.\n  one p: Professor\n  some s_courses: set Course | #s_courses > 1\n  p.teaches = s_courses\n  p.enrolled = s_courses\n} for 4 expect 0",
+                "run {\n  // Negative Instance 5: A single professor teaches multiple courses (C1 and C2), and is enrolled in C2 (which she teaches).\n  one p: Professor\n  one c1, c2: Course | c1 != c2\n  p.teaches = c1 + c2\n  p.enrolled = c2\n} for 4 expect 0"
+            ]
+        },
+        "this/inv9": {
+            "parse": [
+                "run {\n  one p: Professor, one c: Course, one s: Student {\n    p teaches c\n    s in c.grades.Person\n    no (Professor - p)\n  }\n} for 4 expect 1",
+                "run {\n  one p1, p2: Professor, one c1: Course, one s1: Student | p1 != p2 {\n    p1 teaches c1\n    s1 in c1.grades.Person\n    not (p2 in c1.grades.Person)\n  }\n} for 4 expect 1",
+                "run {\n  one p1, p2: Professor, one c1, c2: Course, one s1, s2: Student | p1 != p2 and c1 != c2 {\n    p1 teaches c1\n    s1 in c1.grades.Person\n    p2 teaches c2\n    s2 in c2.grades.Person\n    not (p2 in c1.grades.Person)\n    not (p1 in c2.grades.Person)\n  }\n} for 4 expect 1",
+                "run {\n  one p1, p2: Professor, one c1, c2: Course, one s1, s2: Student | p1 != p2 and c1 != c2 and s1 != s2 {\n    p1 teaches c1\n    p1 teaches c2\n    s1 in c1.grades.Person\n    s2 in c2.grades.Person\n    no p2.teaches\n    not (p2 in c1.grades.Person)\n    not (p2 in c2.grades.Person)\n  }\n} for 4 expect 1",
+                "run {\n  one p1, p2: Professor, one c: Course | p1 != p2 {\n    p1 teaches c\n    p2 in c.grades.Person\n  }\n} for 4 expect 0",
+                "run {\n  one p1, p2: Professor, one c1, c2: Course, one s1: Student | p1 != p2 and c1 != c2 {\n    p1 teaches c1\n    p2 in c1.grades.Person\n    p2 teaches c2\n    s1 in c2.grades.Person\n  }\n} for 4 expect 0",
+                "run {\n  one p1, p2: Professor, one c1, c2: Course, one s1: Student | p1 != p2 and c1 != c2 {\n    p1 teaches c1\n    p1 teaches c2\n    p2 in c1.grades.Person\n    s1 in c2.grades.Person\n  }\n} for 4 expect 0",
+                "run {\n  one p1, p2: Professor, one c1, c2: Course, one s1, s2: Student | p1 != p2 and c1 != c2 and s1 != s2 {\n    p1 teaches c1\n    p2 in c1.grades.Person\n    p2 teaches c2\n    s1 in c2.grades.Person\n    s2 in c1.grades.Person\n  }\n} for 4 expect 0",
+                "run {\n  one p1, p2: Professor, one c1, c2, c3: Course, one s1: Student | p1 != p2 and c1 != c2 and c2 != c3 and c1 != c3 {\n    p1 teaches c1\n    p2 in c1.grades.Person\n    p1 teaches c2\n    p2 teaches c3\n    s1 in c2.grades.Person\n  }\n} for 4 expect 0"
+            ]
+        },
+        "this/inv10": {
+            "parse": [
+                "run {\n    one s: Student\n    one c: Course\n    one g: Grade\n    c.grades = s -> g\n} for 4 expect 1",
+                "run {\n    some s1, s2: Student | s1 != s2\n    some c1, c2: Course | c1 != c2\n    some g1, g2: Grade | g1 != g2\n    s1 -> g1 in c1.grades\n    s2 -> g2 in c2.grades\n    // \"Only students have grades\"\n    all p: Person, gr: Grade | (some cur: Course | p -> gr in cur.grades) implies p in Student\n} for 4 expect 1",
+                "run {\n    some Professor\n    some s: Student\n    some c: Course\n    some g: Grade\n    s -> g in c.grades\n    // \"Only students have grades\"\n    all p: Person, gr: Grade | (some cur: Course | p -> gr in cur.grades) implies p in Student\n} for 4 expect 1",
+                "run {\n    some s1, s2: Student | s1 != s2\n    one c: Course\n    some g1, g2: Grade | g1 != g2\n    s1 -> g1 in c.grades\n    s2 -> g2 in c.grades\n    // \"Only students have grades\"\n    all p: Person, gr: Grade | (some cur: Course | p -> gr in cur.grades) implies p in Student\n} for 4 expect 1",
+                "run {\n    one prof: Professor\n    one c: Course\n    one g: Grade\n    prof -> g in c.grades\n} for 4 expect 0",
+                "run {\n    one prof: Professor\n    one s: Student\n    one c: Course\n    some g1, g2: Grade | g1 != g2\n    prof -> g1 in c.grades\n    s -> g2 in c.grades\n} for 4 expect 0",
+                "run {\n    some p1, p2: Professor | p1 != p2\n    some c1, c2: Course | c1 != c2\n    some g1, g2: Grade | g1 != g2\n    p1 -> g1 in c1.grades\n    p2 -> g2 in c2.grades\n} for 4 expect 0",
+                "run {\n    one p: Professor\n    some c1, c2: Course | c1 != c2\n    some g1, g2: Grade | g1 != g2\n    p -> g1 in c1.grades\n    p -> g2 in c2.grades\n} for 4 expect 0",
+                "run {\n    one p: Professor\n    one c: Course\n    some g1, g2: Grade | g1 != g2\n    p -> g1 in c.grades\n    p -> g2 in c.grades\n} for 4 expect 0"
+            ]
+        },
+        "this/inv11": {
+            "parse": [
+                "run {\n  no Student\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 1",
+                "run {\n  some Student\n  no c: Course, s: Student | s in c.grades.dom\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 1",
+                "run {\n  one s: Student, one c: Course, one g: Grade {\n    s -> g in c.grades\n    c in s.enrolled\n  }\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 1",
+                "run {\n  one s1: Student, one s2: Student - s1\n  one c1: Course, one c2: Course - c1\n  one g1: Grade, one g2: Grade - g1 {\n    s1 -> g1 in c1.grades\n    s1 -> g2 in c2.grades\n    c1 in s1.enrolled\n    c2 in s1.enrolled\n    no c: Course | s2 in c.grades.dom // S2 has no grades\n  }\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 1",
+                "run {\n  one p1: Professor, one s1: Student\n  one c1: Course, one c2: Course - c1\n  one g1: Grade, one g2: Grade - g1 {\n    p1 -> g1 in c1.grades // Professor P1 has a grade in C1\n    s1 -> g2 in c2.grades // Student S1 has a grade in C2\n    c2 in s1.enrolled // Student S1 is enrolled in C2\n  }\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 1",
+                "run {\n  one s: Student, one c: Course, one g: Grade {\n    s -> g in c.grades\n    not (c in s.enrolled)\n  }\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 0",
+                "run {\n  one s: Student\n  one c1: Course, one c2: Course - c1\n  one g1: Grade, one g2: Grade - g1 {\n    s -> g1 in c1.grades\n    s -> g2 in c2.grades\n    c1 in s.enrolled\n    not (c2 in s.enrolled)\n  }\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 0",
+                "run {\n  one s1: Student, one s2: Student - s1\n  one c1: Course, one c2: Course - c1\n  one g1: Grade, one g2: Grade - g1 {\n    s1 -> g1 in c1.grades\n    c1 in s1.enrolled // S1 is compliant\n\n    s2 -> g2 in c2.grades\n    not (c2 in s2.enrolled) // S2 violates the rule\n  }\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 0",
+                "run {\n  one s: Student, one c: Course\n  some g1: Grade, some g2: Grade - g1 { // s has at least two grades in c\n    s -> g1 in c.grades\n    s -> g2 in c.grades\n    not (c in s.enrolled)\n  }\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 0",
+                "run {\n  one s1: Student, one p1: Professor\n  one c1: Course, one c2: Course - c1\n  one g1: Grade, one g2: Grade - g1 {\n    s1 -> g1 in c1.grades\n    not (c1 in s1.enrolled) // S1 violates the rule\n\n    p1 -> g2 in c2.grades\n    not (c2 in p1.enrolled) // P1 is not a Student, so this is irrelevant to the rule\n  }\n  StudentGradesOnlyInEnrolledCourses\n} for 4 expect 0"
+            ]
+        },
+        "this/inv12": {
+            "parse": [
+                "run {\n  one c: Course\n  two s: Student\n  two g: Grade\n  let s1 = Student[0], s2 = Student[1] |\n  let g1 = Grade[0], g2 = Grade[1] |\n    c.grades = (s1 -> g1) + (s2 -> g2)\n  all c_all: Course, s_all: Student | lone (s_all.(c_all.grades))\n} for 4 expect 1",
+                "run {\n  one s: Student\n  two c: Course\n  two g: Grade\n  let c1 = Course[0], c2 = Course[1] |\n  let g1 = Grade[0], g2 = Grade[1] |\n    c1.grades = s -> g1\n    c2.grades = s -> g2\n  all c_all: Course, s_all: Student | lone (s_all.(c_all.grades))\n} for 4 expect 1",
+                "run {\n  one s: Student | one c: Course | two g: Grade |\n    let g1 = Grade[0], g2 = Grade[1] |\n    c.grades = (s -> g1) + (s -> g2)\n  not (all c_all: Course, s_all: Student | lone (s_all.(c_all.grades)))\n} for 4 expect 0",
+                "run {\n  one s: Student | one c: Course | three g: Grade |\n    let g1 = Grade[0], g2 = Grade[1], g3 = Grade[2] |\n    c.grades = (s -> g1) + (s -> g2) + (s -> g3)\n  not (all c_all: Course, s_all: Student | lone (s_all.(c_all.grades)))\n} for 4 expect 0",
+                "run {\n  one c: Course\n  two s: Student\n  three g: Grade\n  let s1 = Student[0], s2 = Student[1] |\n  let g1 = Grade[0], g2 = Grade[1], g3 = Grade[2] |\n    c.grades = (s1 -> g1) + (s1 -> g2) + (s2 -> g3)\n  not (all c_all: Course, s_all: Student | lone (s_all.(c_all.grades)))\n} for 4 expect 0",
+                "run {\n  one s: Student\n  two c: Course\n  three g: Grade\n  let c1 = Course[0], c2 = Course[1] |\n  let g1 = Grade[0], g2 = Grade[1], g3 = Grade[2] |\n    c1.grades = (s -> g1) + (s -> g2)\n    c2.grades = s -> g3\n  not (all c_all: Course, s_all: Student | lone (s_all.(c_all.grades)))\n} for 4 expect 0",
+                "run {\n  one s: Student\n  one c: Course\n  two g: Grade\n  some Professor\n  some Project\n  some OtherCourse: Course - c\n  s.enrolled = c + OtherCourse\n  Professor.teaches = OtherCourse\n  c.projects = Project\n  OtherCourse.projects = Project\n  let g1 = Grade[0], g2 = Grade[1] |\n    c.grades = (s -> g1) + (s -> g2)\n  not (all c_all: Course, s_all: Student | lone (s_all.(c_all.grades)))\n} for 4 expect 0"
+            ]
+        },
+        "this/inv13": {
+            "parse": [
+                "run Positive_SingleStudentHighestAndProject {\n  one c: Course, one s: Student, one g: Grade, one p: Project {\n    c.grades = s -> g\n    c.projects = p\n    s.projects = p\n  }\n} for 4 expect 1",
+                "run Positive_MultipleStudentsHighestAndProject {\n  one c: Course\n  one s1, s2: Student | s1 != s2\n  one g_highest, g_lower: Grade {\n    g_highest = next[g_lower] // Explicitly make g_highest greater than g_lower\n  }\n  one p1: Project\n  {\n    c.grades = s1 -> g_highest + s2 -> g_lower\n    c.projects = p1\n    s1.projects = p1\n    // s2's projects don't matter as s2 does not have the highest grade\n  }\n} for 4 expect 1",
+                "run Positive_MultipleHighestAllProjects {\n  one c: Course\n  one s1, s2: Student | s1 != s2\n  one g_highest: Grade\n  one p1: Project\n  {\n    c.grades = s1 -> g_highest + s2 -> g_highest\n    c.projects = p1\n    s1.projects = p1\n    s2.projects = p1\n  }\n} for 4 expect 1",
+                "run Positive_NoGradesInCourse {\n  one c: Course\n  one s: Student\n  // c.grades remains empty for 'c'\n} for 4 expect 1",
+                "run Negative_HighestNoProject {\n  one c: Course, one s: Student, one g: Grade, one p: Project {\n    c.grades = s -> g\n    c.projects = p\n    s.projects = none // s has no projects at all\n  }\n} for 4 expect 0",
+                "run Negative_MultipleStudentsHighestNoProject {\n  one c: Course\n  one s1, s2: Student | s1 != s2\n  one g_highest, g_lower: Grade {\n    g_highest = next[g_lower] // Explicitly make g_highest greater than g_lower\n  }\n  one p1: Project\n  {\n    c.grades = s1 -> g_highest + s2 -> g_lower\n    c.projects = p1\n    s1.projects = none // s1 has no projects, thus no project on c\n  }\n} for 4 expect 0",
+                "run Negative_HighestHasOtherProject {\n  one c: Course, one s: Student, one g: Grade\n  one p1_course, p2_student: Project | p1_course != p2_student\n  {\n    c.grades = s -> g\n    c.projects = p1_course\n    s.projects = p2_student // s has a project, but it's not the project for course c\n  }\n} for 4 expect 0",
+                "run Negative_MultipleHighestOneNoProject {\n  one c: Course\n  one s1, s2: Student | s1 != s2\n  one g_highest: Grade\n  one p1: Project\n  {\n    c.grades = s1 -> g_highest + s2 -> g_highest\n    c.projects = p1\n    s1.projects = p1 // s1 satisfies the condition\n    s2.projects = none // s2 violates the condition\n  }\n} for 4 expect 0",
+                "run Negative_HighestNoCourseProjects {\n  one c: Course, one s: Student, one g: Grade {\n    c.grades = s -> g\n    no c.projects // Course c has no projects\n    // s's projects are irrelevant as no project can be \"on that course\" if the course has none.\n  }\n} for 4 expect 0"
+            ]
+        },
+        "this/inv14": {
+            "parse": [
+                "run Pos_NoStudentPartnerships {\n  #Student = 2\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 and\n    s2.projects = p2 and\n    no s : Student - (s1 + s2) | s.projects != none // Other students (if any) have no projects\n  student_no_same_partner_diff_projects\n} for 4 expect 1",
+                "run Pos_OnePartnershipOneProject {\n  #Student = 3\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1], s3 = Student[2] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 and\n    s2.projects = p1 and\n    s3.projects = p2 and\n    student_no_same_partner_diff_projects\n} for 4 expect 1",
+                "run Pos_OneStudentMultipleProjects {\n  #Student = 1\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 + p2 and\n    student_no_same_partner_diff_projects\n} for 4 expect 1",
+                "run Pos_MultipleDistinctPartnerships {\n  #Student = 4\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1], s3 = Student[2], s4 = Student[3] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 and\n    s2.projects = p1 and\n    s3.projects = p2 and\n    s4.projects = p2 and\n    student_no_same_partner_diff_projects\n} for 4 expect 1",
+                "run Pos_AloneAndPartnered {\n  #Student = 2\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 + p2 and\n    s2.projects = p2 and\n    student_no_same_partner_diff_projects\n} for 4 expect 1",
+                "run Neg_SamePartnerDifferentProjects {\n  #Student = 2\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 + p2 and\n    s2.projects = p1 + p2 and\n    student_no_same_partner_diff_projects\n} for 4 expect 0",
+                "run Neg_MoreComplexViolation {\n  #Student = 3\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1], s3 = Student[2] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 + p2 and\n    s2.projects = p1 + p2 and\n    s3.projects = p2 and // s3 is only in p2\n    student_no_same_partner_diff_projects\n} for 4 expect 0",
+                "run Neg_TripletViolation {\n  #Student = 3\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1], s3 = Student[2] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 + p2 and\n    s2.projects = p1 + p2 and\n    s3.projects = p1 + p2 and\n    student_no_same_partner_diff_projects\n} for 4 expect 0",
+                "run Neg_OneViolatingPairAmongOthers {\n  #Student = 4\n  #Project = 3 // Need P1, P2, P3\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1], s3 = Student[2], s4 = Student[3] |\n  let p1 = Project[0], p2 = Project[1], p3 = Project[2] |\n    s1.projects = p1 + p2 and // S1, S2 violate\n    s2.projects = p1 + p2 and\n    s3.projects = p3 and // S3, S4 are fine\n    s4.projects = p3 and\n    student_no_same_partner_diff_projects\n} for 4 expect 0",
+                "run Neg_NestedViolation {\n  #Student = 3\n  #Project = 2\n  #Grade = 0\n  #Course = 0\n  #Professor = 0\n  let s1 = Student[0], s2 = Student[1], s3 = Student[2] |\n  let p1 = Project[0], p2 = Project[1] |\n    s1.projects = p1 + p2 and // S1, S2 work on P1 and P2 (violation)\n    s2.projects = p1 + p2 and\n    s3.projects = p1 and // S1, S3 work only on P1 (allowed for this pair)\n    student_no_same_partner_diff_projects\n} for 4 expect 0"
+            ]
+        },
+        "this/inv15": {
+            "parse": [
+                "run {\n  no Student\n  studentProjectGradeConstraint\n} for 4 expect 1",
+                "run {\n  one c: Course, p1, p2: Project, s1, s2: Student |\n    p1 != p2\n    c.projects = p1 + p2\n    s1 in c.enrolled\n    s2 in c.enrolled\n    s1.projects = p1 // s1 works only on p1\n    s2.projects = p2 // s2 works only on p2\n    c.grades = (s1 -> Grade.first) + (s2 -> Grade.next[Grade.first])\n  studentProjectGradeConstraint\n} for 4 expect 1",
+                "run {\n  one c: Course, p: Project, s1, s2: Student |\n    s1 != s2\n    p in c.projects\n    s1 in c.enrolled\n    s2 in c.enrolled\n    p in s1.projects\n    p in s2.projects\n    c.grades = (s1 -> Grade.first) + (s2 -> Grade.first)\n  studentProjectGradeConstraint\n} for 4 expect 1",
+                "run {\n  one c: Course, p: Project, s1, s2: Student |\n    s1 != s2\n    p in c.projects\n    s1 in c.enrolled\n    s2 in c.enrolled\n    p in s1.projects\n    p in s2.projects\n    some g: Grade |\n      // Ensure g and Grade.next[g] are distinct and exist within the scope.\n      g = Grade.first\n      c.grades = (s1 -> g) + (s2 -> Grade.next[g])\n  studentProjectGradeConstraint\n} for 4 expect 1",
+                "run {\n  one c1, c2: Course, p1, p2: Project, s1, s2, s3, s4: Student |\n    c1 != c2 and p1 != p2 and s1 != s2 and s1 != s3 and s1 != s4 and s2 != s3 and s2 != s4 and s3 != s4\n\n    // Course 1, Project 1: s1 and s2 with grades differing by one\n    p1 in c1.projects\n    s1 in c1.enrolled and s2 in c1.enrolled\n    p1 in s1.projects and p1 in s2.projects\n    c1.grades = (s1 -> Grade.first) + (s2 -> Grade.next[Grade.first])\n\n    // Course 2, Project 2: s3 and s4 with identical grades\n    p2 in c2.projects\n    s3 in c2.enrolled and s4 in c2.enrolled\n    p2 in s3.projects and p2 in s4.projects\n    c2.grades = (s3 -> Grade.next[Grade.first]) + (s4 -> Grade.next[Grade.first])\n\n    // Ensure no other enrollments or project assignments for these students that could cause issues\n    no s: Student - (s1 + s2 + s3 + s4)\n    no p: Project - (p1 + p2)\n    no c: Course - (c1 + c2)\n    s1.projects = p1 and s2.projects = p1\n    s3.projects = p2 and s4.projects = p2\n    s1 not in c2.enrolled and s2 not in c2.enrolled\n    s3 not in c1.enrolled and s4 not in c1.enrolled\n} for 4 expect 1",
+                "run {\n  one c: Course, p: Project, s1, s2: Student |\n    s1 != s2\n    p in c.projects\n    s1 in c.enrolled\n    s2 in c.enrolled\n    p in s1.projects\n    p in s2.projects\n    some g: Grade |\n      // Ensure g and Grade.next[Grade.next[g]] are distinct and exist.\n      g = Grade.first // Use Grade.first to ensure Grade.next[Grade.next[g]] exists within for 4 scope\n      c.grades = (s1 -> g) + (s2 -> Grade.next[Grade.next[g]])\n} for 4 expect 0",
+                "run {\n  one c: Course, p: Project, s1, s2, s3: Student |\n    s1 != s2 and s1 != s3 and s2 != s3\n    p in c.projects\n    s1 in c.enrolled and s2 in c.enrolled and s3 in c.enrolled\n    p in s1.projects and p in s2.projects and p in s3.projects\n    some g: Grade |\n      g = Grade.first\n      // s1 and s2 grades violate the constraint\n      c.grades = (s1 -> g) + (s2 -> Grade.next[Grade.next[g]]) + (s3 -> Grade.next[g])\n} for 4 expect 0",
+                "run {\n  one c: Course, p1, p2: Project, s1, s2, s3, s4: Student |\n    p1 != p2\n    s1 != s2 and s1 != s3 and s1 != s4 and s2 != s3 and s2 != s4 and s3 != s4\n\n    // Violating pair: s1, s2 on p1 in c\n    p1 in c.projects\n    s1 in c.enrolled and s2 in c.enrolled\n    p1 in s1.projects and p1 in s2.projects\n    c.grades = (s1 -> Grade.first) + (s2 -> Grade.next[Grade.next[Grade.first]])\n\n    // Compliant pair: s3, s4 on p2 in c (different project in the same course)\n    p2 in c.projects\n    s3 in c.enrolled and s4 in c.enrolled\n    p2 in s3.projects and p2 in s4.projects\n    c.grades = c.grades + (s3 -> Grade.next[Grade.first]) + (s4 -> Grade.next[Grade.next[Grade.first]])\n} for 4 expect 0",
+                "run {\n  one c1, c2: Course, p1, p2: Project, s1, s2, s3, s4: Student |\n    c1 != c2 and p1 != p2 and s1 != s2 and s1 != s3 and s1 != s4 and s2 != s3 and s2 != s4 and s3 != s4\n\n    // Violation in c1, p1: s1 and s2 grades differ by two\n    p1 in c1.projects\n    s1 in c1.enrolled and s2 in c1.enrolled\n    p1 in s1.projects and p1 in s2.projects\n    c1.grades = (s1 -> Grade.first) + (s2 -> Grade.next[Grade.next[Grade.first]])\n\n    // Compliant pair in c2, p2: s3 and s4 grades differ by one\n    p2 in c2.projects\n    s3 in c2.enrolled and s4 in c2.enrolled\n    p2 in s3.projects and p2 in s4.projects\n    c2.grades = (s3 -> Grade.first) + (s4 -> Grade.next[Grade.first])\n\n    // Ensure no cross-project/course assignments for these specific students\n    s1.projects = p1 and s2.projects = p1\n    s3.projects = p2 and s4.projects = p2\n    s1 not in c2.enrolled and s2 not in c2.enrolled\n    s3 not in c1.enrolled and s4 not in c1.enrolled\n} for 4 expect 0",
+                "run {\n  one c: Course, p: Project, s1, s2: Student |\n    s1 != s2\n    p in c.projects\n    s1 in c.enrolled\n    s2 in c.enrolled\n    p in s1.projects\n    p in s2.projects\n    some g: Grade |\n      // Ensure g and Grade.next[Grade.next[Grade.next[g]]] exist.\n      g = Grade.first // Use Grade.first to guarantee availability\n      c.grades = (s1 -> g) + (s2 -> Grade.next[Grade.next[Grade.next[g]]])\n} for 4 expect 0"
             ]
         }
     }
