@@ -6,7 +6,7 @@
 
 ## Resumo
 
-Este projeto estende o trabalho "Validating Formal Specifications with LLM-generated Test Cases" (FM26) ao investigar se modelos de linguagem menores e mais baratos — especificamente o **Gemini 2.0 Flash** — conseguem gerar casos de teste Alloy com qualidade comparável ao GPT-5, quando assistidos por um pipeline **multi-agente com pós-processamento sintático**.
+Este projeto estende o trabalho "Validating Formal Specifications with LLM-generated Test Cases" (FM26) ao investigar se modelos de linguagem menores e mais baratos — especificamente o **Gemini 2.5 Flash** — conseguem gerar casos de teste Alloy com qualidade comparável ao GPT-5, quando assistidos por um pipeline **multi-agente com pós-processamento sintático**.
 
 ## Escopo
 
@@ -14,31 +14,31 @@ O artigo base demonstrou que LLMs grandes (GPT-5) geram test cases Alloy com at�
 
 ## Perguntas de Pesquisa
 
-- **RQ1:** O pós-processamento sintático reduz significativamente os erros de sintaxe gerados pelo Gemini 2.0 Flash?
-- **RQ2:** Com pós-processamento, o Gemini 2.0 Flash consegue detectar especificações incorretas em nível similar ao GPT-5?
-- **RQ3:** Qual é a relação custo-benefício entre usar GPT-5 direto vs Gemini 2.0 Flash + pós-processamento?
+- **RQ1:** O pós-processamento sintático reduz significativamente os erros de sintaxe gerados pelo Gemini 2.5 Flash?
+- **RQ2:** Com pós-processamento, o Gemini 2.5 Flash consegue detectar especificações incorretas em nível similar ao GPT-5?
+- **RQ3:** Qual é a relação custo-benefício entre usar GPT-5 direto vs Gemini 2.5 Flash + pós-processamento?
 
 ## Arquitetura Multi-Agente
 
 ```
-Requisito (NL)
+NL Requirement
 │
 ▼
 ┌─────────────────┐
-│ Agente 1 │ → Chama Gemini 2.0 Flash e gera rascunho dos test cases Alloy
-│ Generator │
+│    Agent 1      │ → Calls Gemini 2.5 Flash and generates draft Alloy test cases
+│   Generator     │
 └────────┬────────┘
-│
-▼
+         │
+         ▼
 ┌─────────────────┐
-│ Agente 2 │ → Aplica regras de correção sintática (scope, run, none, etc.)
-│ Post-Processor │
+│    Agent 2      │ → Applies syntax correction rules (scope, run, none, etc.)
+│ Post-Processor  │
 └────────┬────────┘
-│
-▼
+         │
+         ▼
 ┌─────────────────┐
-│ Agente 3 │ → Executa Alloy Analyzer, coleta métricas e decide retry
-│ Validator │
+│    Agent 3      │ → Runs Alloy Analyzer, collects metrics and decides retry
+│   Validator     │
 └─────────────────┘
 ```
 
@@ -47,26 +47,52 @@ Requisito (NL)
 ```
 ├── README.md
 ├── SCOPE.md
+├── docs/
+│   ├── Relatorio_Final.md     # Relatório detalhado do projeto
+│   ├── Apresentacao.md        # Roteiro slide-a-slide da apresentação
+│   └── images/                # Imagens dos resultados
 ├── src/
-│ ├── agents/
-│ │ ├── agent_generator.py # Agente 1: geração via Gemini 2.0 Flash
-│ │ ├── agent_postprocessor.py # Agente 2: correção sintática
-│ │ └── agent_validator.py # Agente 3: validação com Alloy Analyzer
-│ ├── pipeline.py # Orquestrador dos 3 agentes
-│ └── config.py # Configurações gerais
+│   ├── agents/
+│   │   ├── agent_generator.py      # Agente 1: geração via Gemini 2.5 Flash
+│   │   ├── agent_postprocessor.py  # Agente 2: correção sintática
+│   │   └── agent_validator.py      # Agente 3: validação com Alloy Analyzer
+│   ├── pipeline.py                 # Orquestrador dos 3 agentes
+│   └── config.py                   # Configurações gerais
 ├── prompts/
-│ └── prompt_few_gemini.txt # Prompt few-shot adaptado para Gemini
+│   └── prompt_few_gemini.txt       # Prompt few-shot adaptado para Gemini
 ├── data/
-│ ├── inputs/ # Requisitos e modelos Alloy do benchmark
-│ ├── raw/ # Saídas brutas do Gemini
-│ └── processed/ # Métricas processadas
-├── analysis/ # Scripts de análise herdados do artigo
-├── execute/ # Scripts de execução herdados do artigo
-├── prepare/ # Scripts de preparação herdados do artigo
+│   ├── inputs/                     # Requisitos e modelos Alloy do benchmark
+│   ├── raw/                        # Saídas brutas do Gemini
+│   └── processed/                  # Métricas processadas
+├── analysis/                       # Scripts de análise herdados do artigo
+├── execute/                        # Scripts de execução herdados do artigo
+├── prepare/                        # Scripts de preparação herdados do artigo
 ├── Dockerfile
 ├── requirements.txt
 └── alloytools.jar
 ```
+
+## Resultados
+
+O experimento foi executado avaliando o modelo **Gemini 2.5 Flash** (com e sem o pipeline multi-agente de pós-processamento) em comparação ao baseline do **GPT-5**.
+
+Os resultados obtidos a partir do notebook de análise consolidaram as seguintes métricas de desempenho:
+
+### Tabelas Comparativas de Performance
+
+#### Métricas Absolutas
+![Tabela de Métricas Absolutas](docs/images/results_table1.png)
+
+#### Métricas Relativas (%)
+![Tabela de Métricas Relativas](docs/images/results_table2.png)
+
+### Gráficos Comparativos
+
+#### Desempenho na Geração de Instâncias (Syntax %, Consistent %, Valid %)
+![Gráfico de Geração de Instâncias](docs/images/results_chart1.png)
+
+#### Taxa de Especificações Incorretas Não Detectadas (Missed %) - Menor é Melhor
+![Gráfico de Missed Specifications](docs/images/results_chart2.png)
 
 
 ## Como Reproduzir

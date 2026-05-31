@@ -26,3 +26,24 @@ Entry tracks are those without predecessors	177	907	0.00	10	2	2	1	1	10.00	0
 Junctions are the tracks with more than one predecessor	182	1140	0.00	10	0	0	0	0	0.00	0			
 Entry tracks must have a speed signal	178	864	0.00	10	0	0	0	0	0.00	0			
 The station has no cycles	176	978	0.00	10	0	0	0	0	0.00	0			
+It should be possible to reach every exit from every entry	182	1370	0.00	0	0	0	0	0	0.00	1	50	50	100.00
+Tracks not followed by junctions do not have semaphores	182	2325	0.00	10	0	0	0	0	0.00	0			
+Every track before a junction has a semaphore	179	1128	0.00	10	0	0	0	0	0.00	0			
+Train station totals	1790	10452	0.00	90	24	24	22	22	24.4	3	236	70	39.11
+Only students can be enrolled in courses	197	451	0.00	10	9	3	3	2	20.00	0			
+Only professors can teach courses	195	753	0.00	10	10	10	10	10	100.00	1	33	4	12.12
+Courses must have teachers	194	774	0.00	10	0	0	0	0	0.00	0			
+Projects are proposed by one course	196	698	0.00	10	0	0	0	0	0.00	0			
+Only students work on projects and projects must have someone working on them	203	1123	0.00	10	0	0	0	0	0.00	0			
+Students only work on projects of courses they are enrolled in	201	1045	0.00	0	0	0	0	0	0.00	1	168	168	100.00
+Students work on at most one project per course	199	1359	0.00	0	0	0	0	0	0.00	1	177	177	100.00
+A professor cannot teach herself	195	750	0.00	10	3	3	3	3	30.00	0			
+A professor cannot teach colleagues	195	864	0.00	10	1	1	1	1	10.00	0			
+Only students have grades	194	906	0.00	10	1	1	1	1	10.00	0			
+Students only have grades in courses they are enrolled	199	1276	0.00	10	0	0	0	0	0.00	0			
+Students have at most one grade per course	198	1001	0.00	10	3	3	3	3	30.00	0			
+A student with the highest mark in a course must have worked on a project on that course	208	1363	0.00	10	1	1	1	1	10.00	0			
+A student cannot work with the same student in different projects	201	1621	0.00	10	0	0	0	0	0.00	0			
+Students working on the same project in a course cannot have marks differing by more than one unit	208	2460	0.00	10	0	0	0	0	0.00	0			
+Courses totals	2983	16444	0.01	130	28	22	22	21	16.2	3	378	349	70.71
+Totals	8419	43831	0.01	398	116	103	100	93	23.37	8	842	431	42.46
