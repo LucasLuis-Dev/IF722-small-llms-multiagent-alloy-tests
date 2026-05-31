@@ -1,23 +1,34 @@
 """
-Orquestra os 3 agentes.
+Pipeline principal – orquestra os 3 agentes para cada requisito.
 """
+from src.agents.agent_generator import generate_test_cases
+from src.agents.agent_postprocessor import postprocess
+from src.agents.agent_validator import run_alloy
+from src.config import MAX_RETRIES
+import json, os
 
-from agents.agent_generator import generate_test_cases
-from agents.agent_postprocessor import postprocess
-from agents.agent_validator import validate
-
-def run_pipeline(prompt: str):
-    print("1. Gerando casos de teste...")
-    raw_output = generate_test_cases(prompt)
+def run_pipeline(requirement: str) -> dict:
+    for attempt in range(1, MAX_RETRIES + 1):
+        print(f"[Agente 1] Gerando test cases (tentativa {attempt})...")
+        raw = generate_test_cases(requirement)
+        
+        print("[Agente 2] Aplicando pós-processamento sintático...")
+        processed = postprocess(raw)
+        
+        print("[Agente 3] Validando com Alloy Analyzer...")
+        result = run_alloy(processed)
+        result["attempt"] = attempt
+        result["raw"] = raw
+        result["processed"] = processed
+        
+        if result["valid"]:
+            print(f"[Pipeline] Válido na tentativa {attempt}.")
+            return result
     
-    print("2. Pós-processando o modelo...")
-    processed_output = postprocess(raw_output)
-    
-    print("3. Validando com Alloy Analyzer...")
-    metrics = validate(processed_output)
-    
-    return metrics
+    print("[Pipeline] Máximo de tentativas atingido.")
+    return result
 
 if __name__ == "__main__":
-    # Exemplo de execução
-    run_pipeline("Exemplo de prompt")
+    req = input("Digite o requisito: ")
+    result = run_pipeline(req)
+    print(json.dumps(result, indent=2))

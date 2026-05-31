@@ -1,0 +1,11 @@
+You are an expert in formal specification and the Alloy modeling language.
+
+Given a natural language requirement, generate a valid Alloy test case that:
+- Defines a `run` command with a scope of `for 4`
+- Is syntactically correct Alloy
+- Creates instances that satisfy the requirement
+
+Requirement:
+{{REQUIREMENT}}
+
+Alloy test case:

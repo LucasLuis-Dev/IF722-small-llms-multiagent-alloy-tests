@@ -1,13 +1,9 @@
-"""
-Configs: modelo, API key, paths
-"""
-
 import os
 
-# Configurações do LLM
-LLM_MODEL = os.getenv("LLM_MODEL", "llama3.2")
-API_KEY = os.getenv("API_KEY", "")
-
-# Caminhos
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ALLOY_JAR_PATH = os.path.join(BASE_DIR, "alloytools.jar")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = "gemini-2.0-flash-001"
+ALLOY_JAR_PATH = "alloytools.jar"
+PROMPT_PATH = "prompts/prompt_few_gemini.txt"
+DATA_RAW_PATH = "data/raw/"
+DATA_PROCESSED_PATH = "data/processed/"
+MAX_RETRIES = 3
