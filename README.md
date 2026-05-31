@@ -1,65 +1,98 @@
-# Plano Experimental — Detalhamento do Escopo
+# IF722 – Small LLMs with Multi-Agent Post-Processing for Alloy Test Generation
 
-## Contexto
+> Projeto da disciplina IF722 – Engenharia de Software Baseada em Evidências  
+> Universidade Federal de Pernambuco (UFPE)  
+> Forked from [haslab/Alloy-LLM-Testing](https://github.com/haslab/Alloy-LLM-Testing)
 
-O artigo de referência demonstrou que o GPT-5 com few-shot prompting alcança ~96% de taxa de testes válidos na geração de casos de teste para especificações formais Alloy. Contudo, o uso do GPT-5 tem custo elevado e depende de API proprietária.
+## Resumo
 
-Modelos menores (open-source ou versões "mini") cometem mais erros sintáticos na geração de código Alloy — principalmente em padrões específicos como `R none` ao invés de `R none -> none`. Esses erros são sistemáticos e previsíveis.
+Este projeto estende o trabalho "Validating Formal Specifications with LLM-generated Test Cases" (FM26) ao investigar se modelos de linguagem menores e mais baratos — especificamente o **Gemini 2.0 Flash** — conseguem gerar casos de teste Alloy com qualidade comparável ao GPT-5, quando assistidos por um pipeline **multi-agente com pós-processamento sintático**.
 
-Nossa hipótese é que um agente de pós-processamento determinístico, aplicado após a saída do LLM menor, pode corrigir a maioria desses erros e aproximar a taxa de testes válidos à do modelo maior, com custo significativamente menor.
+## Escopo
 
-***
+O artigo base demonstrou que LLMs grandes (GPT-5) geram test cases Alloy com até 96% de validade usando few-shot prompting. Este projeto questiona: **é possível obter resultados similares com modelos menores e mais baratos, adicionando um agente de correção sintática automática?**
 
-## Modelos Avaliados
+## Perguntas de Pesquisa
 
-| Modelo | Tipo | Motivo |
-|--------|------|--------|
-| GPT-5 (referência) | Proprietário grande | Baseline do artigo original |
-| GPT-4o-mini | Proprietário pequeno | Amplamente acessível, baixo custo |
-| Llama 3.1 8B (via Ollama) | Open-source local | Gratuito, reprodutível sem API |
+- **RQ1:** O pós-processamento sintático reduz significativamente os erros de sintaxe gerados pelo Gemini 2.0 Flash?
+- **RQ2:** Com pós-processamento, o Gemini 2.0 Flash consegue detectar especificações incorretas em nível similar ao GPT-5?
+- **RQ3:** Qual é a relação custo-benefício entre usar GPT-5 direto vs Gemini 2.0 Flash + pós-processamento?
 
-***
+## Arquitetura Multi-Agente
 
-## Regras de Pós-Processamento (Agente 2)
+```
+Requisito (NL)
+│
+▼
+┌─────────────────┐
+│ Agente 1 │ → Chama Gemini 2.0 Flash e gera rascunho dos test cases Alloy
+│ Generator │
+└────────┬────────┘
+│
+▼
+┌─────────────────┐
+│ Agente 2 │ → Aplica regras de correção sintática (scope, run, none, etc.)
+│ Post-Processor │
+└────────┬────────┘
+│
+▼
+┌─────────────────┐
+│ Agente 3 │ → Executa Alloy Analyzer, coleta métricas e decide retry
+│ Validator │
+└─────────────────┘
+```
 
-Baseadas nas causas de erro identificadas no artigo de referência:
+## Estrutura do Repositório
 
-1. **Correção de relações vazias**: `R none` → `R none -> none` (para relações binárias)
-2. **Inserção de scope ausente**: detectar comandos `run` sem `for N X` e inferir scope padrão
-3. **Correção de expect**: garantir que testes positivos usem `expect 1` e negativos `expect 0`
-4. **Normalização de `some disj`**: verificar que todos os quantificadores usam o padrão `some disj`
-5. **Limpeza de blocos malformados**: detectar e remover comandos `run` incompletos ou sem corpo
+```
+├── README.md
+├── SCOPE.md
+├── src/
+│ ├── agents/
+│ │ ├── agent_generator.py # Agente 1: geração via Gemini 2.0 Flash
+│ │ ├── agent_postprocessor.py # Agente 2: correção sintática
+│ │ └── agent_validator.py # Agente 3: validação com Alloy Analyzer
+│ ├── pipeline.py # Orquestrador dos 3 agentes
+│ └── config.py # Configurações gerais
+├── prompts/
+│ └── prompt_few_gemini.txt # Prompt few-shot adaptado para Gemini
+├── data/
+│ ├── inputs/ # Requisitos e modelos Alloy do benchmark
+│ ├── raw/ # Saídas brutas do Gemini
+│ └── processed/ # Métricas processadas
+├── analysis/ # Scripts de análise herdados do artigo
+├── execute/ # Scripts de execução herdados do artigo
+├── prepare/ # Scripts de preparação herdados do artigo
+├── Dockerfile
+├── requirements.txt
+└── alloytools.jar
+```
 
-***
 
-## Métricas de Avaliação
+## Como Reproduzir
 
-Seguindo exatamente o artigo de referência:
+### Sem Docker
+```bash
+pip install -r requirements.txt
+export GEMINI_API_KEY=sua_chave_aqui
+python src/pipeline.py
+```
 
-| Métrica | Descrição |
-|---------|-----------|
-| **Tests** | Total de casos de teste gerados |
-| **Syntax** | Casos sintaticamente corretos (após pós-processamento) |
-| **Consistent** | Casos que produzem uma instância no Alloy Analyzer |
-| **Previous** | Casos que satisfazem todos os requisitos anteriores |
-| **Valid** | Casos que concordam com o oráculo (requisito correto) |
-| **Cost** | Custo real de chamada à API do LLM |
+### Com Docker
+```bash
+docker build -t alloy-multiagent .
+docker run -e GEMINI_API_KEY=sua_chave alloy-multiagent
+```
 
-Métricas adicionais deste projeto:
-- **Syntax (antes do PP)** — para medir o ganho do pós-processamento isolado
-- **Syntax (depois do PP)** — taxa após correção automática
-- **Delta PP** — diferença entre antes e depois do pós-processamento
+## Baseline
 
-***
+Os resultados do GPT-5 usados como baseline são provenientes do artigo original, disponíveis em [haslab/Alloy-LLM-Testing](https://github.com/haslab/Alloy-LLM-Testing).
 
-## Cronograma Sugerido
+## Equipe
 
-| Semana | Atividade |
-|--------|-----------|
-| 1 | Fork do repositório base, setup do ambiente Docker/Ollama |
-| 2 | Implementar Agente 1 (Generator) com GPT-4o-mini e Llama |
-| 3 | Implementar Agente 2 (Post-processor) com as regras acima |
-| 4 | Implementar Agente 3 (Validator) e pipeline completo |
-| 5 | Executar experimentos e coletar dados |
-| 6 | Análise, geração de tabelas/gráficos e escrita do relatório |
-| 7 | Preparação da apresentação |
+| Nome | Login UFPE |
+|------|-----------|
+| Lucas Luis de Souza | lls4 |
+| Antonio Apolinario | aab2 |
+| Monyque Gabrieli | mgbl |
+| Lucas de Holanda | lhl |
