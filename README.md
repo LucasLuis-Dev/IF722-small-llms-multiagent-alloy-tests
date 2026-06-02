@@ -144,7 +144,7 @@ python -m src.pipeline
 ### 4. Executando o Benchmark Completo (Processamento em Lote)
 Para reproduzir as estatísticas dos 43 requisitos do artigo (430 testes gerados), execute o orquestrador do experimento. Isso pode demorar entre 10 a 15 minutos, pois o script respeita o limite de chamadas (Rate Limit) do *Free Tier* do Gemini.
 ```bash
-python src/run_experiment.py
+python -m src.run_experiment
 ```
 > *A execução salvará os artefatos de saída em `data/raw/experiment_raw.json` e `data/processed/experiment_processed.json`.*
 
@@ -177,7 +177,7 @@ docker run -it -e GEMINI_API_KEY="sua_chave_aqui" alloy-multiagent python -m src
 ```
 3. Rode o experimento em lote (Equivalente ao Passo 4):
 ```bash
-docker run -it -v ${PWD}:/app -e GEMINI_API_KEY="sua_chave_aqui" alloy-multiagent python src/run_experiment.py
+docker run -it -v ${PWD}:/app -e GEMINI_API_KEY="sua_chave_aqui" alloy-multiagent python -m src.run_experiment
 ```
 *(O uso de `-v ${PWD}:/app` é crucial para que os arquivos `.json` gerados dentro do container sejam salvos na sua máquina host e possam ser acessados pelo Jupyter ou pelo script de extração).*
 

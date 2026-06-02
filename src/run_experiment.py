@@ -11,6 +11,7 @@ import sys
 
 from src.agents.agent_generator import generate_test_cases
 from src.agents.agent_postprocessor import postprocess
+from src.agents.agent_validator import run_alloy
 
 def run_experiment(limit=None):
     dataset_path = "prepare/results/dataset.json"
@@ -43,38 +44,71 @@ def run_experiment(limit=None):
             req_desc = req['description']
             print(f"[{count+1}/{total_reqs}] Processando: {example['example']} -> {req['pred']}")
             
-            # Agente 1
-            max_retries = 3
-            success = False
-            for attempt in range(max_retries):
-                try:
-                    result = generate_test_cases(req_desc, model_code)
-                    success = True
+            # Multi-Agent Self-Reflection Loop
+            max_reflections = 3
+            previous_code = None
+            previous_error = None
+            final_result = {"instances": "", "input tokens": 0, "output tokens": 0}
+            success_reflection = False
+            
+            for reflection in range(max_reflections):
+                print(f"  [Reflexão {reflection+1}/{max_reflections}] Iniciando geração...")
+                success_api = False
+                
+                # Retry loop apenas para erros de HTTP/API (Timeouts, Rate Limits)
+                for api_attempt in range(3):
+                    try:
+                        current_result = generate_test_cases(req_desc, model_code, previous_code, previous_error)
+                        success_api = True
+                        break
+                    except Exception as e:
+                        print(f"    [API Erro] Tentativa {api_attempt+1} falhou: {e}")
+                        time.sleep(5)
+                
+                if not success_api:
+                    print("    Falha de API persistente. Abortando reflexões deste requisito.")
                     break
-                except Exception as e:
-                    print(f"  Tentativa {attempt+1} falhou: {e}")
-                    time.sleep(5)
+                
+                # Acumula os tokens usados nas várias chamadas de reflexão
+                final_result["input tokens"] += current_result.get("input tokens", 0)
+                final_result["output tokens"] += current_result.get("output tokens", 0)
+                final_result["instances"] = current_result["instances"] # Mantém a última gerada
+                
+                # Agente 2: Limpa código
+                raw_instances = current_result['instances']
+                processed_instances = postprocess(raw_instances)
+                
+                # Agente 3: Validação da JVM
+                full_alloy_code = model_code + "\n" + processed_instances
+                val_result = run_alloy(full_alloy_code)
+                
+                if val_result["valid"]:
+                    print(f"  [Sucesso] Teste perfeitamente válido gerado na reflexão {reflection+1}!")
+                    success_reflection = True
+                    break
+                else:
+                    print(f"  [Erro JVM] Falha de sintaxe ou consistência. Realimentando LLM...")
+                    print(f"    [Motivo] {val_result['raw_output']}")
+                    previous_code = raw_instances
+                    previous_error = val_result["raw_output"]
+                    time.sleep(5) # Delay do Rate Limit da API
             
-            if not success:
-                print("  Falha após todas as tentativas. Salvando vazio.")
-                result = {"instances": "", "input tokens": 0, "output tokens": 0}
+            if not success_reflection:
+                print("  [Aviso] Falha após todas as reflexões. Salvando a última tentativa (com erro).")
             
-            # Popula RAW
-            raw_instances = result['instances']
-            dataset_raw[i]['requirements'][j]['instances'] = raw_instances
-            dataset_raw[i]['requirements'][j]['input tokens'] = result['input tokens']
-            dataset_raw[i]['requirements'][j]['output tokens'] = result['output tokens']
+            # Popula RAW com a última tentativa (melhor esforço)
+            dataset_raw[i]['requirements'][j]['instances'] = final_result['instances']
+            dataset_raw[i]['requirements'][j]['input tokens'] = final_result['input tokens']
+            dataset_raw[i]['requirements'][j]['output tokens'] = final_result['output tokens']
             
-            # Agente 2
-            processed_instances = postprocess(raw_instances)
-            dataset_processed[i]['requirements'][j]['instances'] = processed_instances
-            dataset_processed[i]['requirements'][j]['input tokens'] = result['input tokens']
-            dataset_processed[i]['requirements'][j]['output tokens'] = result['output tokens']
+            # Popula PROCESSED com o pós-processamento da última tentativa
+            dataset_processed[i]['requirements'][j]['instances'] = postprocess(final_result['instances'])
+            dataset_processed[i]['requirements'][j]['input tokens'] = final_result['input tokens']
+            dataset_processed[i]['requirements'][j]['output tokens'] = final_result['output tokens']
             
             count += 1
             
-            # Free tier do Gemini permite 15 requisições por minuto (1 a cada 4 segundos)
-            # Como geramos 1 por vez, 5 segundos é uma margem segura
+            # Delay final antes do próximo requisito
             time.sleep(5)
             
         if limit and count >= limit:
