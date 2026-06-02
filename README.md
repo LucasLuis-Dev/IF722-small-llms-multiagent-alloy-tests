@@ -83,7 +83,12 @@ NL Requirement
 
 ## Resultados
 
-O experimento foi executado avaliando o modelo **Gemini 2.5 Flash** (com e sem o pipeline multi-agente de pós-processamento) em comparação ao baseline do **GPT-5**.
+O experimento foi executado avaliando o modelo **Gemini 2.5 Flash** (com e sem o pipeline multi-agente de pós-processamento e Self-Reflection) em comparação ao baseline do **GPT-5**.
+
+**Principais Descobertas:**
+1. **Recuperação Sintática:** A integração do *Stateful Self-Reflection* utilizando o JPype (Java) para coletar logs de erro aumentou a taxa de testes com sintaxe correta de 15.6% para **36.3%** no Gemini Flash.
+2. **Shortcut Learning:** Apesar da melhoria sintática, a complexidade relacional da linguagem Alloy se mostrou um desafio semântico para o *Small LLM*. Para satisfazer a compilação, o Gemini frequentemente relaxou restrições lógicas, o que gerou uma taxa de validade de **21.2%** e um alto número de especificações errôneas ignoradas (Misses: **78.9%**).
+3. **Eficiência de Custo:** Todo o desenvolvimento e validação massiva custaram apenas ~R$ 27 com o Gemini, contra os ~$3.56 USD por execução pura estimada do GPT-5, provando viabilidade econômica.
 
 Os resultados obtidos a partir do notebook de análise consolidaram as seguintes métricas de desempenho:
 
@@ -134,12 +139,12 @@ export GEMINI_API_KEY="sua_chave_aqui"
 export JAVA_HOME="/usr/lib/jvm/java-11-openjdk"
 ```
 
-### 3. Executando o Pipeline Interativo (Teste Único)
-Para interagir com os agentes individualmente e testar o mecanismo de *Self-Reflection* implementado:
+### 3. Execução Interativa: A "Demo do Professor" 🎓
+Para apresentar na banca ou em sala de aula de forma instantânea sem precisar esperar o benchmark inteiro de 15 minutos, criamos um script de demonstração interativa já com um modelo padrão do Alloy4Fun (*Photo sharing social network*).
 ```bash
-python -m src.pipeline
+python demo_professor.py
 ```
-*O terminal pedirá um requisito em linguagem natural e mostrará o log passo a passo dos 3 agentes validando sua entrada.*
+*O script carregará automaticamente as signatures base e o requisito, mostrará o código na tela e iniciará o ciclo de Self-Reflection do LLM interagindo com o JPype até encontrar a solução.*
 
 ### 4. Executando o Benchmark Completo (Processamento em Lote)
 Para reproduzir as estatísticas dos 43 requisitos do artigo (430 testes gerados), execute o orquestrador do experimento. Isso pode demorar entre 10 a 15 minutos, pois o script respeita o limite de chamadas (Rate Limit) do *Free Tier* do Gemini.
