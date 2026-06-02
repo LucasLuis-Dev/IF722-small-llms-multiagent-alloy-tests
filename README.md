@@ -23,9 +23,14 @@ O artigo base demonstrou que LLMs grandes (GPT-5) geram test cases Alloy com at�
 
 ## Perguntas de Pesquisa
 
-- **RQ1:** O pós-processamento sintático reduz significativamente os erros de sintaxe gerados pelo Gemini 2.5 Flash?
-- **RQ2:** Com pós-processamento, o Gemini 2.5 Flash consegue detectar especificações incorretas em nível similar ao GPT-5?
-- **RQ3:** Qual é a relação custo-benefício entre usar GPT-5 direto vs Gemini 2.5 Flash + pós-processamento?
+- **RQ1: O pós-processamento sintático reduz significativamente os erros de sintaxe gerados pelo Gemini 2.5 Flash?**
+  **Sim.** O pipeline com pós-processamento e *self-reflection* elimina erros estruturais como "Duplicate Signature" e aumenta a taxa de sintaxe correta para 36.3%.
+
+- **RQ2: Com pós-processamento, o Gemini 2.5 Flash consegue detectar especificações incorretas em nível similar ao GPT-5?**
+  **Parcialmente.** A detecção melhora em relação ao modo bruto, mas o Gemini ainda perde 78.9% das especificações errôneas, bem acima dos 11.9% de *Missed* do GPT-5.
+
+- **RQ3: Qual é a relação custo-benefício entre usar GPT-5 direto vs Gemini 2.5 Flash + pós-processamento?**
+  **Definitivamente favorável.** O Gemini roda no *free tier*, e todo o desenvolvimento custou ~R$ 27, enquanto uma única bateria com GPT-5 custa cerca de US$ 3.56, inviabilizando muitas iterações.
 
 ## Arquitetura Multi-Agente
 
