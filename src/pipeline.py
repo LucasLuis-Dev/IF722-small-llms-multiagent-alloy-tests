@@ -7,13 +7,25 @@ from src.agents.agent_validator import run_alloy
 from src.config import MAX_RETRIES
 import json, os
 
-def run_pipeline(requirement: str, model_code: str = "") -> dict:
+def run_pipeline(requirement: str, model_code: str = "", oracle: str = None) -> dict:
     previous_code = None
     previous_error = None
+    previous_processed_code = None
+    previous_full_alloy_code = None
+    previous_validation = None
     
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"[Agente 1] Gerando test cases (tentativa {attempt})...")
-        raw = generate_test_cases(requirement, model_code, previous_code, previous_error)
+        raw = generate_test_cases(
+            requirement,
+            model_code,
+            oracle,
+            previous_code,
+            previous_error,
+            previous_processed_code=previous_processed_code,
+            previous_full_alloy_code=previous_full_alloy_code,
+            previous_validation=previous_validation,
+        )
         
         print("[Agente 2] Aplicando pós-processamento sintático...")
         processed_instances = postprocess(raw['instances'])
@@ -34,6 +46,13 @@ def run_pipeline(requirement: str, model_code: str = "") -> dict:
             print(f"[Pipeline] Erro detectado na tentativa {attempt}. Iniciando self-reflection para a próxima...")
             previous_code = raw['instances']
             previous_error = result["raw_output"]
+            previous_processed_code = processed_instances
+            previous_full_alloy_code = full_alloy_code
+            previous_validation = {
+                "syntax": result["syntax"],
+                "consistent": result["consistent"],
+                "valid": result["valid"],
+            }
             
     print("[Pipeline] Máximo de tentativas atingido. O código final ainda possui erros.")
     return result

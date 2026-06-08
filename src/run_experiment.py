@@ -12,6 +12,7 @@ import sys
 from src.agents.agent_generator import generate_test_cases
 from src.agents.agent_postprocessor import postprocess
 from src.agents.agent_validator import run_alloy
+from src.config import MAX_RETRIES
 
 def run_experiment(limit=None):
     dataset_path = "prepare/results/dataset.json"
@@ -45,9 +46,12 @@ def run_experiment(limit=None):
             print(f"[{count+1}/{total_reqs}] Processando: {example['example']} -> {req['pred']}")
             
             # Multi-Agent Self-Reflection Loop
-            max_reflections = 3
+            max_reflections = MAX_RETRIES
             previous_code = None
             previous_error = None
+            previous_processed_code = None
+            previous_full_alloy_code = None
+            previous_validation = None
             final_result = {"instances": "", "input tokens": 0, "output tokens": 0}
             success_reflection = False
             
@@ -58,7 +62,15 @@ def run_experiment(limit=None):
                 # Retry loop apenas para erros de HTTP/API (Timeouts, Rate Limits)
                 for api_attempt in range(3):
                     try:
-                        current_result = generate_test_cases(req_desc, model_code, previous_code, previous_error)
+                        current_result = generate_test_cases(
+                            req_desc,
+                            model_code,
+                            previous_code,
+                            previous_error,
+                            previous_processed_code=previous_processed_code,
+                            previous_full_alloy_code=previous_full_alloy_code,
+                            previous_validation=previous_validation,
+                        )
                         success_api = True
                         break
                     except Exception as e:
@@ -91,6 +103,13 @@ def run_experiment(limit=None):
                     print(f"    [Motivo] {val_result['raw_output']}")
                     previous_code = raw_instances
                     previous_error = val_result["raw_output"]
+                    previous_processed_code = processed_instances
+                    previous_full_alloy_code = full_alloy_code
+                    previous_validation = {
+                        "syntax": val_result["syntax"],
+                        "consistent": val_result["consistent"],
+                        "valid": val_result["valid"],
+                    }
                     time.sleep(5) # Delay do Rate Limit da API
             
             if not success_reflection:
